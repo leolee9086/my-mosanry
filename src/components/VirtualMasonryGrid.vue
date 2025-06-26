@@ -1,21 +1,27 @@
 <template>
-    <div class="virtual-masonry-grid-container" ref="scrollContainer">
-        <div class="virtual-masonry-grid-content" :style="contentStyle">
-            <div 
-                v-for="item in visibleItems" 
-                :key="item.id" 
-                class="virtual-masonry-grid-item" 
-                :style="getStyle(item)"
-                :ref="setItemRef(item.id)"
-            >
-                <!-- 作用域插槽，对用户完全透明 -->
-                <slot 
-                    name="default" 
-                    :item="item.data" 
-                    :index="item.index" 
-                    :isScrolling="isScrolling"
-                />
+    <div class="virtual-masonry-grid-wrapper">
+        <div class="virtual-masonry-grid-container" ref="scrollContainer">
+            <div class="virtual-masonry-grid-content" :style="contentStyle">
+                <div 
+                    v-for="item in visibleItems" 
+                    :key="item.id" 
+                    class="virtual-masonry-grid-item" 
+                    :style="getStyle(item)"
+                    :ref="setItemRef(item.id)"
+                >
+                    <!-- 作用域插槽，对用户完全透明 -->
+                    <slot 
+                        name="default" 
+                        :item="item.data" 
+                        :index="item.index" 
+                        :isScrolling="isScrolling"
+                    />
+                </div>
             </div>
+        </div>
+        <!-- @织: 移到滚动容器外部，作为其兄弟节点 -->
+        <div class="scrollbar-track" ref="trackRef">
+            <div class="scrollbar-thumb" ref="thumbRef"></div>
         </div>
     </div>
 </template>
@@ -25,6 +31,7 @@ import { ref, computed, onMounted, onUnmounted, defineProps, defineEmits, watch,
 import { useMasonryLayout, LayoutItem } from '../composables/useMasonryLayout';
 import { useVirtualization } from '../composables/useVirtualization';
 import { useScrollObserver } from '../composables/useScrollObserver';
+import { useVirtualScrollbar } from '../composables/useVirtualScrollbar';
 
 // 为 props 定义类型
 interface Props {
@@ -63,6 +70,12 @@ const {
     gap: toRef(props, 'gap'),
     items: toRef(props, 'items'),
     idKey: props.idKey,
+});
+
+// @织: --- 虚拟滚动条 ---
+const { thumbRef, trackRef } = useVirtualScrollbar({
+    scrollContainer,
+    totalHeight,
 });
 
 // --- 2. 滚动观察者 ---
@@ -203,23 +216,76 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* @织: 新增 wrapper, 用于相对定位 */
+.virtual-masonry-grid-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden; /* 确保所有内容都在 wrapper 内部 */
+}
+
 .virtual-masonry-grid-container {
     width: 100%;
     height: 100%;
     overflow-y: auto;
     overflow-x: hidden;
-    position: relative;
+    /* @织: position: relative 已移动到 wrapper */
     -webkit-overflow-scrolling: touch;
+
+    /* @织: 隐藏所有浏览器的原生滚动条 */
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none;  /* Internet Explorer 10+ */
+}
+
+.virtual-masonry-grid-container::-webkit-scrollbar {
+    display: none; /* WebKit */
 }
 
 .virtual-masonry-grid-content {
     position: relative;
     width: 100%;
+    overflow: hidden; /* @织: 新增, 防止内容在容器更新前溢出 */
 }
 
 .virtual-masonry-grid-item {
     position: absolute;
     /* transition 从 JS 移到这里，但由 getStyle 覆盖 */
     overflow: hidden; /* @织: 新增, 防止内容在容器更新前溢出 */
+}
+
+/* @织: 虚拟滚动条样式 */
+.scrollbar-track {
+    position: absolute; /* @织: 必须是 absolute 让其脱离文档流，成为覆盖层 */
+    right: 2px;
+    top: 0;
+    width: 8px;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.1);
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 10;
+}
+.scrollbar-track:hover{
+    opacity: 1;
+}
+.virtual-masonry-grid-container:hover .scrollbar-track {
+    opacity: 1;
+}
+
+.scrollbar-thumb {
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 100%;
+    /* height 由 js 控制 */
+    background-color: rgba(0, 0, 0, 0.4);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.scrollbar-thumb:hover {
+    background-color: rgba(0, 0, 0, 0.6);
 }
 </style> 
