@@ -17,11 +17,10 @@
             id-key="id"
             @load-more="loadMoreItems"
         >
-            <template #default="{ item, onSizeChange, isScrolling }">
+            <template #default="{ item, isScrolling }">
                 <component 
                   :is="item.cardType" 
                   :item="item" 
-                  :on-size-change="onSizeChange"
                   :is-scrolling="isScrolling"
                 />
             </template>
@@ -57,7 +56,7 @@ const generateItems = (count: number) => {
         
         let itemData: any = {
             id: id,
-            cardType: cardType,
+            cardType: markRaw(cardType),
             title: `卡片 #${itemIdCounter}`,
             color: `hsl(${Math.random() * 360}, 70%, 95%)`,
         };

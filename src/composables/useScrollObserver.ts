@@ -1,4 +1,4 @@
-import { ref, onMounted, onUnmounted, Ref } from 'vue';
+import { ref, onMounted, onUnmounted, Ref, watch } from 'vue';
 import { throttle } from '../utils/throttle';
 
 export interface UseScrollObserverOptions {
@@ -17,30 +17,38 @@ export function useScrollObserver({ scrollContainer, onLoadMore, totalHeight }: 
 
     let scrollTimeout: ReturnType<typeof setTimeout> | null = null;
 
+    const checkForLoadMore = () => {
+        const container = scrollContainer.value;
+        if (!container) return;
+        
+        const clientHeight = container.clientHeight;
+        const scrollBottom = scrollTop.value + clientHeight;
+        
+        const loadMoreThreshold = clientHeight * 2.5;
+        if (totalHeight.value > 0 && scrollBottom >= totalHeight.value - loadMoreThreshold) {
+            onLoadMore();
+        }
+    };
+
     const handleScroll = throttle(() => {
         if (!scrollContainer.value) return;
 
         scrollTop.value = scrollContainer.value.scrollTop;
 
-        // --- 更新滚动状态 ---
         isScrolling.value = true;
         if (scrollTimeout) {
             clearTimeout(scrollTimeout);
         }
         scrollTimeout = setTimeout(() => {
             isScrolling.value = false;
-        }, 150); // 滚动停止后150ms，判定为滚动结束
+        }, 150);
 
-        // --- 检查是否需要加载更多 ---
-        const container = scrollContainer.value;
-        const clientHeight = container.clientHeight;
-        const scrollBottom = scrollTop.value + clientHeight;
-        
-        // 提前一个屏幕高度触发加载
-        if (totalHeight.value > 0 && scrollBottom >= totalHeight.value - clientHeight) {
-            onLoadMore();
-        }
-    }, 50); // 对高频滚动事件进行节流
+        checkForLoadMore();
+    }, 50);
+
+    watch(totalHeight, () => {
+        requestAnimationFrame(checkForLoadMore);
+    });
 
     onMounted(() => {
         if (scrollContainer.value) {

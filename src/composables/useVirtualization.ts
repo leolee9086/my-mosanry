@@ -1,14 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { ref, watch, Ref, computed } from 'vue';
+import { ref, computed, watch, Ref } from 'vue';
 import type { LayoutItem } from './useMasonryLayout';
 
 /**
  * 虚拟化计算器的选项
  */
 export interface UseVirtualizationOptions {
+    allItems: Ref<LayoutItem[]>;
     scrollTop: Ref<number>;
     containerHeight: Ref<number>;
-    findVisibleItems: (viewport: { top: number; height: number }) => LayoutItem[];
     overscanBy?: number;
 }
 
@@ -17,35 +17,30 @@ export interface UseVirtualizationOptions {
  * 它不执行任何 DOM 操作或事件监听，只根据输入的滚动位置和容器高度，
  * 计算出应该被渲染的可见项。
  */
-export function useVirtualization({
-    scrollTop,
-    containerHeight,
-    findVisibleItems,
-    overscanBy = 2, // 默认预渲染2个屏幕
-}: UseVirtualizationOptions) {
-
-    // 缓冲区大小等于 N 个屏幕高度
-    const buffer = computed(() => containerHeight.value * (overscanBy - 1));
-
+export function useVirtualization({ allItems, scrollTop, containerHeight, overscanBy = 2 }: UseVirtualizationOptions) {
     const visibleItems = ref<LayoutItem[]>([]);
 
-    const calculateVisibleItems = () => {
-        const viewMinY = scrollTop.value - buffer.value;
-        const viewMaxY = scrollTop.value + containerHeight.value + buffer.value;
+    const overscan = computed(() => overscanBy * containerHeight.value);
 
-        const newVisibleItems = findVisibleItems({
-            top: Math.max(0, viewMinY),
-            height: viewMaxY - viewMinY
-        });
+    const computeVisibleItems = () => {
+        const viewportTop = scrollTop.value - overscan.value;
+        const viewportBottom = scrollTop.value + containerHeight.value + overscan.value;
+
+        const newVisibleItems = allItems.value.filter(item => 
+            item.y + item.height > viewportTop && item.y < viewportBottom
+        );
         
         visibleItems.value = newVisibleItems;
     };
 
-    // 当滚动位置或容器高度变化时，重新计算可见项
-    watch([scrollTop, containerHeight], calculateVisibleItems, { immediate: true });
+    // 监听所有相关依赖，自动重新计算
+    watch([allItems, scrollTop, containerHeight], computeVisibleItems, {
+        immediate: true, // 确保初始加载时执行
+        deep: false // allItems 是 shallowRef，我们只关心它的替换
+    });
 
     return {
         visibleItems,
-        forceUpdate: calculateVisibleItems,
+        forceUpdate: computeVisibleItems, // forceUpdate 仍然可以作为手动触发的手段
     };
 } 

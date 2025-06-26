@@ -5,11 +5,9 @@ import StressTestExample from './StressTestExample.vue';
 import App from './App.vue';
 
 const routes = [
-    { path: '/', component: App, children: [
-        { path: '', redirect: '/simple' },
-        { path: 'simple', component: ExampleApp, name: 'Simple' },
-        { path: 'stress-test', component: StressTestExample, name: 'Stress Test (1M items)' },
-    ]},
+    { path: '/simple', component: ExampleApp, name: 'Simple' },
+    { path: '/stress-test', component: StressTestExample, name: 'Stress Test (1M items)' },
+    { path: '/', redirect: '/simple' },
 ];
 
 const router = createRouter({

@@ -50,13 +50,13 @@ const scrollContainer = ref<HTMLElement | null>(null);
 const containerWidth = ref(0);
 const containerHeight = ref(0);
 
-// --- 1. 布局引擎 ---
+// --- 1. 布局引擎 (已重构为双缓存) ---
 const {
+    allItems, // @织: 直接使用 allItems shallowRef
     totalHeight,
     updateItemHeight,
     rebuildLayout,
-    findVisibleItems,
-    layoutUpdateStamp, // 获取布局更新信号
+    layoutUpdateStamp, // @织: 暂时保留，用于触发虚拟化更新
 } = useMasonryLayout({
     containerWidth,
     columnWidth: toRef(props, 'columnWidth'),
@@ -72,11 +72,11 @@ const { scrollTop, isScrolling } = useScrollObserver({
     onLoadMore: () => emit('load-more'),
 });
 
-// --- 3. 虚拟化计算器 ---
+// --- 3. 虚拟化计算器 (适配 allItems) ---
 const { visibleItems, forceUpdate: forceVirtualizationUpdate } = useVirtualization({
+    allItems, // @织: 直接传入 allItems
     scrollTop,
     containerHeight,
-    findVisibleItems,
     overscanBy: props.overscanBy,
 });
 
@@ -95,7 +95,6 @@ const getStyle = (item: LayoutItem) => ({
 });
 
 // --- DOM Refs and Measurement ---
-// @织: 最终方案：结合 MutationObserver 和 ResizeObserver
 const itemWrapperElements = new Map<any, HTMLElement>();
 const mutationObservers = new Map<any, MutationObserver>();
 const contentToIdMap = new WeakMap<Element, any>();
@@ -112,16 +111,22 @@ const ro = new ResizeObserver(entries => {
     }
 });
 
-// 2. setItemRef - @织: 最终修正版，使用 nextTick 解决时机问题
+// 2. setItemRef - @织: 增加清理逻辑，防止"幽灵更新"
 const setItemRef = (id: any) => (el: any) => {
     if (el) {
+        // 元素已挂载，存储其引用
+        itemWrapperElements.set(id, el as HTMLElement);
+        
         // 使用 nextTick 确保在 DOM 更新完成后执行
         nextTick(() => {
-            const contentEl = (el as HTMLElement).children[0] as HTMLElement;
+            // nextTick 内 el 可能已经改变，重新从 map 获取最新的
+            const wrapperEl = itemWrapperElements.get(id);
+            if (!wrapperEl) return;
+
+            const contentEl = wrapperEl.children[0] as HTMLElement;
             if (contentEl && contentEl.nodeType === 1) {
                 // 1. 立即获取初始高度，无论是否为0
                 const initialHeight = contentEl.getBoundingClientRect().height;
-                console.log(`[VirtualMasonryGrid] Item ${id} content processed via nextTick. Initial height: ${initialHeight.toFixed(2)}px.`);
                 updateItemHeight(id, initialHeight);
                 
                 // 2. 建立反向查找关系
@@ -134,21 +139,37 @@ const setItemRef = (id: any) => (el: any) => {
             }
         });
     } else {
-        // @织: 元素卸载的逻辑可以保持不变，但要确保 ro 能正确停止观察
-        // 当前依赖 onUnmounted 中的 ro.disconnect()，暂时是安全的。
+        // 元素已卸载，执行清理
+        const wrapperEl = itemWrapperElements.get(id);
+        if (wrapperEl) {
+            const contentEl = wrapperEl.children[0] as HTMLElement;
+            if (contentEl) {
+                ro.unobserve(contentEl);
+            }
+            // 清理 map
+            itemWrapperElements.delete(id);
+        }
     }
 };
 
 // --- 监听与响应 ---
+// @织: 当布局引擎完成一批更新后，它的 allItems.value 会被替换，
+// 我们监听这个变化，来强制触发虚拟化引擎的重新计算。
+watch(allItems, () => {
+    forceVirtualizationUpdate();
+});
+
+// @织: 当布局引擎完成动态高度的`update`后，它不会替换 allItems 数组，
+// 而是更新 layoutUpdateStamp。我们监听这个信号，同样强制触发虚拟化更新。
 watch(layoutUpdateStamp, () => {
     forceVirtualizationUpdate();
 });
 
-watch(() => props.items, () => {
-    rebuildLayout();
-}, { deep: true });
+// @织: props.items 的变化会由 useMasonryLayout 内部的 watch 自动处理，
+// 它会自动调用 rebuildLayout，所以顶层不再需要 watch props.items。
 
 watch([containerWidth, () => props.columnWidth, () => props.gap], () => {
+    // @织: 这个 watch 仍然需要，因为它会触发 useMasonryLayout 内部的 rebuildLayout
     rebuildLayout();
 });
 
@@ -167,8 +188,8 @@ onMounted(() => {
         containerWidth.value = scrollContainer.value.clientWidth;
         containerHeight.value = scrollContainer.value.clientHeight;
     }
-    rebuildLayout();
-    forceVirtualizationUpdate();
+    // @织: 初始加载时，rebuildLayout 会被自动调用一次
+    // 首次的 virtualiation update 会在 allItems 的 watch 中被触发
 });
 
 onUnmounted(() => {

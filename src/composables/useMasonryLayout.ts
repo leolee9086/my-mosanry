@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { ref, reactive, computed, Ref } from 'vue';
+import { ref, reactive, computed, Ref, shallowRef, onMounted, onUnmounted, watch } from 'vue';
 import RBush from 'rbush';
+import { createRafScheduler } from '../utils/createRafScheduler';
 
 // --- 类型定义 ---
 
@@ -35,7 +36,7 @@ export interface UseMasonryLayoutOptions {
     idKey: string;
 }
 
-// RBush 需要 minX, minY, maxX, maxY
+// @织: BushItem 不再需要是响应式的，它只是 R-Tree 的数据载体
 class BushItem implements LayoutItem {
     minX: number;
     minY: number;
@@ -51,7 +52,6 @@ class BushItem implements LayoutItem {
     x: number;
     y: number;
 
-    // @织: 移除 style 相关的构造逻辑
     constructor(item: LayoutItem) {
         this.id = item.id;
         this.data = item.data;
@@ -72,26 +72,28 @@ class BushItem implements LayoutItem {
 
 /**
  * 一个管理瀑布流布局计算的 Vue Composable.
- * 使用 R-tree 优化空间查询.
+ * 使用 R-tree 优化空间查询和双重缓存机制优化更新性能.
  */
 export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKey }: UseMasonryLayoutOptions) {
-
-    // 使用 RBush<LayoutItem> 会导致类型错误，因为 RBush 的 search 方法返回的是 T[]
-    // 而 LayoutItem 包含 style getter，这在内部操作中可能导致问题。
-    // 我们使用一个简化的 BushItem 来存储在 r-tree 中。
     const tree = new RBush<BushItem>();
-    const allItems = ref<LayoutItem[]>([]);
+    
+    // @织: 双重缓存 - 渲染层 (shallowRef)
+    // 只在批处理更新完成后整体替换，以触发一次性的、高效的视图更新
+    const allItems = shallowRef<LayoutItem[]>([]); 
+    
+    // @织: 双重缓存 - 计算层 (普通对象)
+    // 所有计算都在这里进行，避免不必要的响应式开销
     const idToItemMap = new Map<any, LayoutItem>();
-    const layoutUpdateStamp = ref(0); // 新增：布局更新时间戳
+    const columns = ref<LayoutColumn[]>([]);
 
-    const updateRequests = new Map<any, number>();
-    let updateTimer: ReturnType<typeof setTimeout> | null = null;
+    const pendingUpdates = new Map<number, number>();
+    const layoutUpdateStamp = ref(Date.now());
+
     const columnCount = computed(() => {
         if (!containerWidth.value || !columnWidth.value) return 1;
         return Math.max(1, Math.floor(containerWidth.value / columnWidth.value));
     });
 
-    const columns = ref<LayoutColumn[]>([]);
     const initializeColumns = () => {
         columns.value = Array.from({ length: columnCount.value }, () => ({ height: 0, items: [] }));
     };
@@ -106,123 +108,128 @@ export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKe
         return shortest;
     };
 
-    const addItem = (itemData: any) => {
-        const id = itemData[idKey];
-        if (idToItemMap.has(id)) {
+    const processPendingUpdates = () => {
+        if (pendingUpdates.size === 0) {
             return;
         }
 
-        const shortestColumn = getShortestColumn();
-        const columnIndex = shortestColumn.index;
-        
-        const itemPartial: LayoutItem = {
-            id,
-            data: itemData,
-            index: allItems.value.length,
-            columnIndex,
-            indexInColumn: columns.value[columnIndex]?.items.length ?? 0,
-            width: columnWidth.value,
-            height: columnWidth.value, // 初始高度，待内容加载后更新
-            x: columnIndex * (columnWidth.value + gap.value),
-            y: shortestColumn.height,
-            minX: 0, minY: 0, maxX: 0, maxY: 0 // 将在 BushItem 中计算
-        };
-        const newItem = reactive(new BushItem(itemPartial));
-        columns.value[columnIndex].items.push(newItem);
-        columns.value[columnIndex].height += newItem.height + gap.value;
-        idToItemMap.set(id, newItem);
-        allItems.value.push(newItem);
-        tree.insert(newItem);
-    };
-    const updateItemHeight = (itemId: any, newHeight: number) => {
-        console.log(`[updateItemHeight] Item '${itemId}' height changed to ${newHeight.toFixed(2)}px.`);
-        updateRequests.set(itemId, newHeight);
-        if (!updateTimer) {
-            updateTimer = setTimeout(processPendingUpdates, 30);
-        }
-    };
+        const updatesToProcess = new Map(pendingUpdates);
+        pendingUpdates.clear();
 
-    const processPendingUpdates = () => {
-        // 关键修复：立即复制并清空待处理队列，以避免竞态条件
-        const requestsToProcess = new Map(updateRequests);
-        updateRequests.clear();
+        const changedColumns = new Map<number, number>(); // <columnIndex, minChangedIndexInColumn>
 
-        const updatesByColumn = new Map<number, { item: LayoutItem, newHeight: number }[]>();
-
-        requestsToProcess.forEach((newHeight, itemId) => {
-            console.log(`[updateItemHeight2] Item '${itemId}' height changed to ${newHeight.toFixed(2)}px.`);
-
-            const item = idToItemMap.get(itemId);
+        updatesToProcess.forEach((height, id) => {
+            const item = idToItemMap.get(id);
             if (!item) return;
 
+            const oldHeight = item.height;
+            if (oldHeight === height) return;
+
+            item.height = height;
+
             const columnIndex = item.columnIndex;
-            if (!updatesByColumn.has(columnIndex)) {
-                updatesByColumn.set(columnIndex, []);
-            }
-            console.log(`[updateItemHeight3] Item '${itemId}' height changed to ${newHeight.toFixed(2)}px.`);
-            updatesByColumn.get(columnIndex)!.push({ item, newHeight });
-        });
-
-        updatesByColumn.forEach((updates, columnIndex) => {
-            const column = columns.value[columnIndex];
-            // 必须按 item 在列中的顺序排序
-            updates.sort((a, b) => a.item.indexInColumn - b.item.indexInColumn);
-            
-            // @织: 恢复到用户确认的、正确的"高度差传播"算法
-            updates.forEach(({ item, newHeight }) => {
-                const oldHeight = item.height;
-                const heightDifference = newHeight - oldHeight;
-                if (heightDifference === 0) return;
-
-                // 从 R-tree 中移除旧边界
-                tree.remove(item as BushItem, (a, b) => a.id === b.id);
-
-                item.height = newHeight;
-                // 更新 R-tree 所需的边界
-                item.maxY = item.y + newHeight;
-                
-                // 重新插入
-                tree.insert(item as BushItem);
-                
-                // 更新列中后续项目的位置
-                for (let i = item.indexInColumn + 1; i < column.items.length; i++) {
-                    const subsequentItem = column.items[i];
-                    tree.remove(subsequentItem as BushItem, (a, b) => a.id === b.id);
-                    subsequentItem.y += heightDifference;
-                    subsequentItem.minY = subsequentItem.y;
-                    subsequentItem.maxY = subsequentItem.y + subsequentItem.height;
-                    tree.insert(subsequentItem as BushItem);
+            if (columnIndex !== undefined) {
+                const itemIndexInColumn = item.indexInColumn;
+                const currentMin = changedColumns.get(columnIndex);
+                if (currentMin === undefined || itemIndexInColumn < currentMin) {
+                    changedColumns.set(columnIndex, itemIndexInColumn);
                 }
-                
-                // 更新列的总高度
-                column.height += heightDifference;
-            });
+            }
         });
-        
-        // 更新时间戳以通知外部布局已更新
-        layoutUpdateStamp.value = Date.now();
 
-        // 检查在处理期间是否有新请求进入，如果有，则安排下一次更新
-        if (updateRequests.size > 0) {
-            updateTimer = setTimeout(processPendingUpdates, 30);
-        } else {
-            updateTimer = null;
+        if (changedColumns.size > 0) {
+            changedColumns.forEach((minChangedIndexInColumn, columnIndex) => {
+                const column = columns.value[columnIndex];
+                if (!column) return;
+
+                // Start from the first changed item in the column
+                const startItem = column.items[minChangedIndexInColumn];
+                let currentY = startItem.y;
+
+                // Recalculate positions for all items from the first changed one
+                for (let i = minChangedIndexInColumn; i < column.items.length; i++) {
+                    const item = column.items[i];
+                    item.y = currentY;
+                    currentY += item.height + (gap?.value ?? 0);
+                }
+                column.height = currentY - (gap?.value ?? 0);
+            });
+            layoutUpdateStamp.value = Date.now();
         }
     };
-    
+
+    const scheduleProcessing = createRafScheduler(processPendingUpdates);
+
+    const updateItemHeight = (id: any, height: number) => {
+        const item = idToItemMap.get(id);
+        if (item && item.height === height) {
+            return;
+        }
+        pendingUpdates.set(id, height);
+        scheduleProcessing();
+    };
+
     const totalHeight = computed(() => {
         if (columns.value.length === 0) return 0;
         return Math.max(...columns.value.map(c => c.height));
     });
 
+    // @织: 将 rebuildLayout 拆分为完全重建和增量添加
+    const appendItems = (itemsToAppend: any[]) => {
+        if (itemsToAppend.length === 0) return;
+
+        const newLayoutItems: LayoutItem[] = [];
+        itemsToAppend.forEach(itemData => {
+            const id = itemData[idKey];
+            // 防止重复添加
+            if (idToItemMap.has(id)) return;
+
+            const shortestColumn = getShortestColumn();
+            const columnIndex = shortestColumn.index;
+            
+            const newItem: LayoutItem = {
+                id,
+                data: itemData,
+                index: allItems.value.length + newLayoutItems.length,
+                columnIndex,
+                indexInColumn: columns.value[columnIndex].items.length,
+                width: columnWidth.value,
+                height: columnWidth.value, // 初始高度
+                x: columnIndex * (columnWidth.value + gap.value),
+                y: shortestColumn.height,
+                minX: 0, minY: 0, maxX: 0, maxY: 0 // 将在 BushItem 中计算
+            };
+
+            columns.value[columnIndex].items.push(newItem);
+            columns.value[columnIndex].height += newItem.height + gap.value;
+            idToItemMap.set(id, newItem);
+            tree.insert(new BushItem(newItem));
+            newLayoutItems.push(newItem);
+        });
+
+        allItems.value = [...allItems.value, ...newLayoutItems];
+        layoutUpdateStamp.value = Date.now();
+    };
+    
     const rebuildLayout = () => {
         initializeColumns();
         tree.clear();
-        const allItemsData = [...items.value];
-        allItems.value = [];
         idToItemMap.clear();
-        allItemsData.forEach(item => addItem(item));
+        allItems.value = [];
+        appendItems(items.value);
     };
+
+    // @织: 关键! 监听外部 items 数组的变化
+    watch(items, (newItems, oldItems) => {
+        if (newItems.length > oldItems.length) {
+            // 这是加载了更多数据
+            const itemsToAppend = newItems.slice(oldItems.length);
+            appendItems(itemsToAppend);
+        } else if (newItems.length < oldItems.length || newItems.some((item, i) => item[idKey] !== oldItems[i]?.[idKey])) {
+            // 这是一个全新的数据集，或者发生了排序/删除等复杂变化
+            rebuildLayout();
+        }
+    });
 
     const findVisibleItems = (viewport: { top: number, height: number }): LayoutItem[] => {
         const results = tree.search({
@@ -231,20 +238,29 @@ export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKe
             maxX: containerWidth.value,
             maxY: viewport.top + viewport.height,
         });
-        return results as LayoutItem[];
+        // @织: 从 R-Tree 拿到 ID，再从 allItems 中获取最新的响应式对象
+        const visibleIds = new Set(results.map(r => r.id));
+        return allItems.value.filter(item => visibleIds.has(item.id));
     }
 
     initializeColumns();
 
+    onMounted(() => {
+        // ... existing code ...
+    });
+
+    onUnmounted(() => {
+        scheduleProcessing.cancel();
+    });
+
     return {
-        // 不再直接暴露 layoutItems，而是通过 findVisibleItems 获取
+        // @织: 不再直接暴露 layoutItems，而是通过 allItems 这个 shallowRef
+        allItems,
         totalHeight,
         columnCount,
-        columns, // columns 仍然可能对虚拟化引擎有用
-        addItem,
         updateItemHeight,
         rebuildLayout,
-        findVisibleItems, // 新增方法
-        layoutUpdateStamp, // 暴露时间戳
+        findVisibleItems,
+        layoutUpdateStamp,
     };
 } 
