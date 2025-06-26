@@ -3,6 +3,9 @@ import { ref, reactive, computed, Ref, shallowRef, onMounted, onUnmounted, watch
 import RBush from 'rbush';
 import { createRafScheduler } from '../utils/createRafScheduler';
 
+// @织: 浏览器能够安全处理的最大CSS高度 (一个比较保守的值)
+const MAX_BROWSER_HEIGHT = 15_000_000;
+
 // --- 类型定义 ---
 
 // @织: 移除 style, 让 layout item 成为纯数据对象
@@ -34,6 +37,7 @@ export interface UseMasonryLayoutOptions {
     gap: Ref<number>;
     items: Ref<any[]>;
     idKey: string;
+    estimatedTotalCount?: Ref<number | undefined>;
 }
 
 // @织: BushItem 不再需要是响应式的，它只是 R-Tree 的数据载体
@@ -74,7 +78,7 @@ class BushItem implements LayoutItem {
  * 一个管理瀑布流布局计算的 Vue Composable.
  * 使用 R-tree 优化空间查询和双重缓存机制优化更新性能.
  */
-export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKey }: UseMasonryLayoutOptions) {
+export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKey, estimatedTotalCount }: UseMasonryLayoutOptions) {
     const tree = new RBush<BushItem>();
     
     // @织: 双重缓存 - 渲染层 (shallowRef)
@@ -174,6 +178,26 @@ export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKe
         return Math.max(...columns.value.map(c => c.height));
     });
 
+    const logicalScrollHeight = computed(() => {
+        const estimatedCount = estimatedTotalCount?.value;
+        const currentItemCount = allItems.value.length;
+
+        if (estimatedCount && estimatedCount > currentItemCount) {
+            const currentTotalHeight = totalHeight.value;
+            // 如果还没有任何项，使用列宽作为估算的初始高度
+            const avgHeight = currentItemCount > 0 
+                ? currentTotalHeight / currentItemCount 
+                : columnWidth.value;
+            
+            return avgHeight * estimatedCount;
+        }
+        return totalHeight.value;
+    });
+
+    const contentHeight = computed(() => {
+        return Math.min(logicalScrollHeight.value, MAX_BROWSER_HEIGHT);
+    });
+
     // @织: 将 rebuildLayout 拆分为完全重建和增量添加
     const appendItems = (itemsToAppend: any[]) => {
         if (itemsToAppend.length === 0) return;
@@ -257,7 +281,9 @@ export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKe
         // @织: 不再直接暴露 layoutItems，而是通过 allItems 这个 shallowRef
         allItems,
         totalHeight,
-        columnCount,
+        logicalScrollHeight, // <-- 修改这里
+        contentHeight,       // <-- 新增这里
+        columnCount,         // @织: 之前的修改好像把这个弄丢了，它应该在
         updateItemHeight,
         rebuildLayout,
         findVisibleItems,

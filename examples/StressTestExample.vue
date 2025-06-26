@@ -8,21 +8,16 @@
             <span :class="['status', isLoading ? 'loading' : 'idle']">
                 状态: {{ isLoading ? '正在加载...' : '空闲' }}
             </span>
+            <div class="controls">
+                <label for="estimated-count">预估总数:</label>
+                <input id="estimated-count" type="number" v-model.number="estimatedCount" />
+            </div>
+
         </div>
-        <VirtualMasonryGrid
-            class="grid-container"
-            :items="items"
-            :column-width="220"
-            :gap="15"
-            id-key="id"
-            @load-more="loadMoreItems"
-        >
+        <VirtualMasonryGrid class="grid-container" :items="items" :column-width="220" :gap="15" id-key="id"
+            :estimated-total-count="estimatedCount" @load-more="loadMoreItems">
             <template #default="{ item, isScrolling }">
-                <component 
-                  :is="item.cardType" 
-                  :item="item" 
-                  :is-scrolling="isScrolling"
-                />
+                <component :is="item.cardType" :item="item" :is-scrolling="isScrolling" />
             </template>
         </VirtualMasonryGrid>
     </div>
@@ -40,12 +35,13 @@ let itemIdCounter = 0;
 
 const items = shallowRef<any[]>([]);
 const isLoading = ref(false);
+const estimatedCount = ref(TOTAL_ITEMS); // <-- 加上这行
 
 const cardComponents = markRaw([ImageCard, TextBlockCard]);
 
 const generateItems = (count: number) => {
     if (items.value.length >= TOTAL_ITEMS) return [];
-    
+
     const newItems = [];
     const limit = Math.min(count, TOTAL_ITEMS - items.value.length);
 
@@ -53,7 +49,7 @@ const generateItems = (count: number) => {
         const id = `item-${itemIdCounter++}`;
         const cardIndex = Math.floor(Math.random() * cardComponents.length);
         const cardType = cardComponents[cardIndex];
-        
+
         let itemData: any = {
             id: id,
             cardType: markRaw(cardType),
@@ -80,7 +76,7 @@ const loadMoreItems = () => {
         return;
     }
     isLoading.value = true;
-    
+
     setTimeout(() => {
         const newItems = generateItems(BATCH_SIZE);
         items.value = [...items.value, ...newItems];
@@ -114,6 +110,29 @@ loadMoreItems();
     z-index: 10;
 }
 
+/* v- 加上下面这些样式 v- */
+.stats-bar .controls {
+    margin-left: 24px;
+    display: flex;
+    align-items: center;
+}
+
+.stats-bar .controls label {
+    margin-right: 8px;
+    font-size: 13px;
+    color: #ccc;
+}
+
+.stats-bar .controls input {
+    width: 100px;
+    background-color: #555;
+    border: 1px solid #777;
+    color: white;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-family: inherit;
+}
+
 .stats-bar .divider {
     margin: 0 12px;
     color: #666;
@@ -140,4 +159,4 @@ loadMoreItems();
     flex: 1;
     position: relative;
 }
-</style> 
+</style>

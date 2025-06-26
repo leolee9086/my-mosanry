@@ -1,5 +1,7 @@
 import { ref, watch, onMounted, onUnmounted, type Ref } from 'vue';
 
+const MIN_THUMB_HEIGHT = 20; // 滚动条滑块的最小高度 (px)
+
 interface UseVirtualScrollbarOptions {
   scrollContainer: Ref<HTMLElement | null>;
   totalHeight: Ref<number>;
@@ -26,7 +28,8 @@ export function useVirtualScrollbar({ scrollContainer, totalHeight }: UseVirtual
 
     thumbRef.value.style.display = 'block';
 
-    const thumbHeight = (clientHeight / scrollHeight) * clientHeight;
+    const rawThumbHeight = (clientHeight / totalHeight.value) * clientHeight;
+    const thumbHeight = Math.max(rawThumbHeight, MIN_THUMB_HEIGHT);
     const thumbTop = (scrollTop / scrollHeight) * clientHeight;
 
     thumbRef.value.style.height = `${thumbHeight}px`;
@@ -45,8 +48,8 @@ export function useVirtualScrollbar({ scrollContainer, totalHeight }: UseVirtual
       scrollContainer.value.addEventListener('scroll', handleScroll, { passive: true });
       updateThumb(); // Initial update
     }
-    if (thumbRef.value) {
-        thumbRef.value.addEventListener('mousedown', handleThumbMouseDown);
+    if (trackRef.value) {
+        trackRef.value.addEventListener('mousedown', handleTrackMouseDown);
     }
   });
 
@@ -59,8 +62,8 @@ export function useVirtualScrollbar({ scrollContainer, totalHeight }: UseVirtual
     }
     document.removeEventListener('mousemove', handleThumbMouseMove);
     document.removeEventListener('mouseup', handleThumbMouseUp);
-    if (thumbRef.value) {
-        thumbRef.value.removeEventListener('mousedown', handleThumbMouseDown);
+    if (trackRef.value) {
+      trackRef.value.removeEventListener('mousedown', handleTrackMouseDown);
     }
   });
 
@@ -68,21 +71,33 @@ export function useVirtualScrollbar({ scrollContainer, totalHeight }: UseVirtual
     updateThumb();
   });
 
-  // --- 拖拽逻辑 ---
+  // --- 拖拽与点击逻辑 ---
   const isDragging = ref(false);
   let startY = 0;
   let startScrollTop = 0;
 
-  const handleThumbMouseDown = (e: MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleTrackMouseDown = (e: MouseEvent) => {
+    if (!(e.target instanceof HTMLElement)) return;
 
-    isDragging.value = true;
-    startY = e.clientY;
-    startScrollTop = scrollContainer.value?.scrollTop ?? 0;
+    if (e.target === thumbRef.value || e.target.parentElement === trackRef.value) {
+        e.preventDefault();
+        e.stopPropagation();
 
-    document.addEventListener('mousemove', handleThumbMouseMove);
-    document.addEventListener('mouseup', handleThumbMouseUp);
+        isDragging.value = true;
+        startY = e.clientY;
+        startScrollTop = scrollContainer.value?.scrollTop ?? 0;
+
+        document.addEventListener('mousemove', handleThumbMouseMove);
+        document.addEventListener('mouseup', handleThumbMouseUp);
+    } else if (e.target === trackRef.value) {
+        const { clientY, currentTarget } = e;
+        if (!scrollContainer.value || !currentTarget) return;
+
+        const trackRect = (currentTarget as HTMLElement).getBoundingClientRect();
+        const clickRatio = (clientY - trackRect.top) / trackRect.height;
+        
+        scrollContainer.value.scrollTop = clickRatio * totalHeight.value;
+    }
   };
 
   const handleThumbMouseMove = (e: MouseEvent) => {
@@ -92,11 +107,9 @@ export function useVirtualScrollbar({ scrollContainer, totalHeight }: UseVirtual
     e.stopPropagation();
 
     const deltaY = e.clientY - startY;
-    const scrollHeight = scrollContainer.value.scrollHeight;
     const clientHeight = scrollContainer.value.clientHeight;
     
-    // 换算鼠标移动距离到滚动条移动距离
-    const scrollDelta = (deltaY / clientHeight) * scrollHeight;
+    const scrollDelta = (deltaY / clientHeight) * totalHeight.value;
 
     scrollContainer.value.scrollTop = startScrollTop + scrollDelta;
   };

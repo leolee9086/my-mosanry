@@ -2,20 +2,10 @@
     <div class="virtual-masonry-grid-wrapper">
         <div class="virtual-masonry-grid-container" ref="scrollContainer">
             <div class="virtual-masonry-grid-content" :style="contentStyle">
-                <div 
-                    v-for="item in visibleItems" 
-                    :key="item.id" 
-                    class="virtual-masonry-grid-item" 
-                    :style="getStyle(item)"
-                    :ref="setItemRef(item.id)"
-                >
+                <div v-for="item in visibleItems" :key="item.id" class="virtual-masonry-grid-item"
+                    :style="getStyle(item)" :ref="setItemRef(item.id)">
                     <!-- 作用域插槽，对用户完全透明 -->
-                    <slot 
-                        name="default" 
-                        :item="item.data" 
-                        :index="item.index" 
-                        :isScrolling="isScrolling"
-                    />
+                    <slot name="default" :item="item.data" :index="item.index" :isScrolling="isScrolling" />
                 </div>
             </div>
         </div>
@@ -39,7 +29,8 @@ interface Props {
     columnWidth?: number;
     gap?: number;
     idKey?: string;
-    overscanBy?: number; // 新增 overscanBy prop
+    overscanBy?: number;
+    estimatedTotalCount?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -59,42 +50,45 @@ const containerHeight = ref(0);
 
 // --- 1. 布局引擎 (已重构为双缓存) ---
 const {
-    allItems, // @织: 直接使用 allItems shallowRef
-    totalHeight,
+    allItems,
+    logicalScrollHeight,
+    contentHeight,
+    totalHeight,         // @织: 获取已加载内容真实高度
     updateItemHeight,
     rebuildLayout,
-    layoutUpdateStamp, // @织: 暂时保留，用于触发虚拟化更新
+    layoutUpdateStamp,
 } = useMasonryLayout({
     containerWidth,
     columnWidth: toRef(props, 'columnWidth'),
     gap: toRef(props, 'gap'),
     items: toRef(props, 'items'),
     idKey: props.idKey,
+    estimatedTotalCount: toRef(props, 'estimatedTotalCount'),
 });
 
 // @织: --- 虚拟滚动条 ---
 const { thumbRef, trackRef } = useVirtualScrollbar({
     scrollContainer,
-    totalHeight,
+    totalHeight: totalHeight,
 });
 
 // --- 2. 滚动观察者 ---
 const { scrollTop, isScrolling } = useScrollObserver({
     scrollContainer,
-    totalHeight,
+    totalHeight: totalHeight, // @织: 使用已加载内容的真实高度来判断是否需要加载更多
     onLoadMore: () => emit('load-more'),
 });
 
 // --- 3. 虚拟化计算器 (适配 allItems) ---
 const { visibleItems, forceUpdate: forceVirtualizationUpdate } = useVirtualization({
-    allItems, // @织: 直接传入 allItems
+    allItems,
     scrollTop,
     containerHeight,
     overscanBy: props.overscanBy,
 });
 
 const contentStyle = computed(() => ({
-    height: `${totalHeight.value}px`,
+    height: `${contentHeight.value}px`,
 }));
 
 // @织: 将样式计算移至组件内部，确保响应性
@@ -129,7 +123,7 @@ const setItemRef = (id: any) => (el: any) => {
     if (el) {
         // 元素已挂载，存储其引用
         itemWrapperElements.set(id, el as HTMLElement);
-        
+
         // 使用 nextTick 确保在 DOM 更新完成后执行
         nextTick(() => {
             // nextTick 内 el 可能已经改变，重新从 map 获取最新的
@@ -141,14 +135,14 @@ const setItemRef = (id: any) => (el: any) => {
                 // 1. 立即获取初始高度，无论是否为0
                 const initialHeight = contentEl.getBoundingClientRect().height;
                 updateItemHeight(id, initialHeight);
-                
+
                 // 2. 建立反向查找关系
                 contentToIdMap.set(contentEl, id);
-                
+
                 // 3. 让 ResizeObserver 接管后续变化
                 ro.observe(contentEl);
             } else {
-                 console.warn(`[VirtualMasonryGrid] Item ${id} has no valid child element on nextTick.`);
+                console.warn(`[VirtualMasonryGrid] Item ${id} has no valid child element on nextTick.`);
             }
         });
     } else {
@@ -221,7 +215,8 @@ onUnmounted(() => {
     position: relative;
     width: 100%;
     height: 100%;
-    overflow: hidden; /* 确保所有内容都在 wrapper 内部 */
+    overflow: hidden;
+    /* 确保所有内容都在 wrapper 内部 */
 }
 
 .virtual-masonry-grid-container {
@@ -233,29 +228,35 @@ onUnmounted(() => {
     -webkit-overflow-scrolling: touch;
 
     /* @织: 隐藏所有浏览器的原生滚动条 */
-    scrollbar-width: none; /* Firefox */
-    -ms-overflow-style: none;  /* Internet Explorer 10+ */
+    scrollbar-width: none;
+    /* Firefox */
+    -ms-overflow-style: none;
+    /* Internet Explorer 10+ */
 }
 
 .virtual-masonry-grid-container::-webkit-scrollbar {
-    display: none; /* WebKit */
+    display: none;
+    /* WebKit */
 }
 
 .virtual-masonry-grid-content {
     position: relative;
     width: 100%;
-    overflow: hidden; /* @织: 新增, 防止内容在容器更新前溢出 */
+    overflow: hidden;
+    /* @织: 新增, 防止内容在容器更新前溢出 */
 }
 
 .virtual-masonry-grid-item {
     position: absolute;
     /* transition 从 JS 移到这里，但由 getStyle 覆盖 */
-    overflow: hidden; /* @织: 新增, 防止内容在容器更新前溢出 */
+    overflow: hidden;
+    /* @织: 新增, 防止内容在容器更新前溢出 */
 }
 
 /* @织: 虚拟滚动条样式 */
 .scrollbar-track {
-    position: absolute; /* @织: 必须是 absolute 让其脱离文档流，成为覆盖层 */
+    position: absolute;
+    /* @织: 必须是 absolute 让其脱离文档流，成为覆盖层 */
     right: 2px;
     top: 0;
     width: 8px;
@@ -266,9 +267,11 @@ onUnmounted(() => {
     transition: opacity 0.3s ease;
     z-index: 10;
 }
-.scrollbar-track:hover{
+
+.scrollbar-track:hover {
     opacity: 1;
 }
+
 .virtual-masonry-grid-container:hover .scrollbar-track {
     opacity: 1;
 }
@@ -283,9 +286,21 @@ onUnmounted(() => {
     border-radius: 4px;
     cursor: pointer;
     transition: background-color 0.2s ease;
+    position: relative;
+    /* @织: 为伪元素提供定位上下文 */
+}
+
+/* @织: 使用伪元素扩展点击区域 */
+.scrollbar-thumb::after {
+    content: '';
+    position: absolute;
+    top: -10px;
+    bottom: -10px;
+    left: 0;
+    right: 0;
 }
 
 .scrollbar-thumb:hover {
     background-color: rgba(0, 0, 0, 0.6);
 }
-</style> 
+</style>
