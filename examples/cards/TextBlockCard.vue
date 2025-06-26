@@ -1,5 +1,5 @@
 <template>
-    <div class="text-block-card" ref="cardRef" :style="{ backgroundColor: item.color }">
+    <div class="text-block-card" :style="{ backgroundColor: item.color }">
         <h3>{{ item.title }}</h3>
         <p>{{ item.content }}</p>
         <div class="card-footer">
@@ -9,7 +9,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, defineProps } from 'vue';
+// 'defineProps' is a compiler macro and no longer needs to be imported.
+// import { defineProps } from 'vue';
 
 interface Item {
   id: any;
@@ -20,32 +21,7 @@ interface Item {
 
 const props = defineProps<{
     item: Item;
-    onSizeChange: (update: { id: any; height: number }) => void;
 }>();
-
-const cardRef = ref<HTMLElement | null>(null);
-let resizeObserver: ResizeObserver | null = null;
-
-onMounted(() => {
-    if (cardRef.value) {
-        resizeObserver = new ResizeObserver(entries => {
-            const entry = entries[0];
-            if (entry) {
-                const newHeight = entry.contentRect.height;
-                if (newHeight > 0) {
-                     props.onSizeChange({ id: props.item.id, height: newHeight });
-                }
-            }
-        });
-        resizeObserver.observe(cardRef.value);
-    }
-});
-
-onUnmounted(() => {
-    if (resizeObserver && cardRef.value) {
-        resizeObserver.unobserve(cardRef.value);
-    }
-});
 </script>
 
 <style scoped>

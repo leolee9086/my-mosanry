@@ -26,3 +26,19 @@
   - 创建 `TikTokTac.md` 制定开发计划。
   - 创建 `AInote.md` 并添加开发者要求。
   - 创建 `src/components/VirtualMasonryGrid.vue` 作为组件的初始骨架文件。 
+
+### 2024-06-26 织
+- **成果**: 彻底修复了瀑布流布局中卡片因动态内容导致重叠的核心 Bug。
+- **架构升级: "父组件驱动测量"**:
+  - 移除了之前由子组件通过 `onSizeChange` 事件上报尺寸的模式。
+  - 在 `VirtualMasonryGrid.vue` 中引入了 `ResizeObserver`，使其能够主动、直接地监听所有可见卡片 DOM 元素的尺寸变化。
+  - 子卡片组件 (如 `ImageCard.vue`, `TextBlockCard.vue`) 被完全"净化"，不再包含任何尺寸计算或事件发出的逻辑，成为纯粹的展示组件。
+  - 这个新架构从根本上解决了尺寸更新时的竞态条件和时序问题，使得布局更新更可靠、更高效。
+- **Bug 修复**:
+  - `composables/useMasonryLayout.ts`: 修复了 `processPendingUpdates` 函数中忘记在更新完成后触发 `layoutUpdateStamp` 信号的问题，重新连接了布局计算与视图渲染之间的通信。
+  - `components/VirtualMasonryGrid.vue`: 修复了 `ResizeObserver` 回调与 `watch` 填充 `idToElementMap` 之间的竞态条件，确保能正确地将变化的 DOM 元素与数据 ID 对应起来。
+- **核心算法重构**:
+  - `composables/useMasonryLayout.ts`: 完全重写了 `processPendingUpdates` 函数中的位置更新算法。旧算法在处理同一列多个卡片并发更新时存在逻辑缺陷，是导致布局重叠的根本原因。新算法通过"多米诺骨牌"式的链式更新，从第一个变化的卡片开始，精确地重新计算后续所有卡片的位置，彻底根除了布局计算的错误。
+- **代码清理**:
+  - 清理了卡片组件中由 Vue 编译器报告的 `defineProps` 宏不再需要导入的警告。
+  - 移除了修复 Bug 过程中添加的调试日志。 

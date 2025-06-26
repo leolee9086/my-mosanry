@@ -13,8 +13,11 @@
             id-key="id"
             @load-more="addItems"
         >
-            <template #default="{ item, onSizeChange, isScrolling }">
-                <TextBlockCard :item="item" :on-size-change="onSizeChange" :is-scrolling="isScrolling" />
+            <template #default="{ item, isScrolling }">
+                <TextBlockCard 
+                    :item="item" 
+                    :is-scrolling="isScrolling"
+                />
             </template>
         </VirtualMasonryGrid>
     </div>

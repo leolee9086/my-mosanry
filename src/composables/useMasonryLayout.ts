@@ -4,7 +4,7 @@ import RBush from 'rbush';
 
 // --- 类型定义 ---
 
-// 扩展 LayoutItem 以包含 R-tree 所需的边界框属性
+// @织: 移除 style, 让 layout item 成为纯数据对象
 export interface LayoutItem {
     id: any;
     data: any;
@@ -20,13 +20,6 @@ export interface LayoutItem {
     minY: number;
     maxX: number;
     maxY: number;
-    readonly style: {
-        position: 'absolute';
-        top: string;
-        left: string;
-        width: string;
-        height: string;
-    };
 }
 
 export interface LayoutColumn {
@@ -42,7 +35,6 @@ export interface UseMasonryLayoutOptions {
     idKey: string;
 }
 
-// 定义 R-tree 项目的类型，继承自 LayoutItem
 // RBush 需要 minX, minY, maxX, maxY
 class BushItem implements LayoutItem {
     minX: number;
@@ -59,7 +51,8 @@ class BushItem implements LayoutItem {
     x: number;
     y: number;
 
-    constructor(item: Omit<LayoutItem, 'style'>) {
+    // @织: 移除 style 相关的构造逻辑
+    constructor(item: LayoutItem) {
         this.id = item.id;
         this.data = item.data;
         this.index = item.index;
@@ -73,16 +66,6 @@ class BushItem implements LayoutItem {
         this.minY = item.y;
         this.maxX = item.x + item.width;
         this.maxY = item.y + item.height;
-    }
-
-    get style() {
-        return {
-            position: 'absolute' as const,
-            top: `${this.y}px`,
-            left: `${this.x}px`,
-            width: `${this.width}px`,
-            height: `${this.height}px`,
-        };
     }
 }
 
@@ -99,11 +82,10 @@ export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKe
     const tree = new RBush<BushItem>();
     const allItems = ref<LayoutItem[]>([]);
     const idToItemMap = new Map<any, LayoutItem>();
+    const layoutUpdateStamp = ref(0); // 新增：布局更新时间戳
 
     const updateRequests = new Map<any, number>();
     let updateTimer: ReturnType<typeof setTimeout> | null = null;
-    let needsRebuildTree = false;
-
     const columnCount = computed(() => {
         if (!containerWidth.value || !columnWidth.value) return 1;
         return Math.max(1, Math.floor(containerWidth.value / columnWidth.value));
@@ -133,7 +115,7 @@ export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKe
         const shortestColumn = getShortestColumn();
         const columnIndex = shortestColumn.index;
         
-        const itemPartial: Omit<LayoutItem, 'style'> = {
+        const itemPartial: LayoutItem = {
             id,
             data: itemData,
             index: allItems.value.length,
@@ -145,31 +127,31 @@ export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKe
             y: shortestColumn.height,
             minX: 0, minY: 0, maxX: 0, maxY: 0 // 将在 BushItem 中计算
         };
-
         const newItem = reactive(new BushItem(itemPartial));
-        
         columns.value[columnIndex].items.push(newItem);
         columns.value[columnIndex].height += newItem.height + gap.value;
-        
         idToItemMap.set(id, newItem);
         allItems.value.push(newItem);
         tree.insert(newItem);
     };
-
     const updateItemHeight = (itemId: any, newHeight: number) => {
+        console.log(`[updateItemHeight] Item '${itemId}' height changed to ${newHeight.toFixed(2)}px.`);
         updateRequests.set(itemId, newHeight);
         if (!updateTimer) {
-            updateTimer = setTimeout(() => {
-                processPendingUpdates();
-                updateTimer = null;
-            }, 30); // 增加延迟以捕获更多更新
+            updateTimer = setTimeout(processPendingUpdates, 30);
         }
     };
 
     const processPendingUpdates = () => {
+        // 关键修复：立即复制并清空待处理队列，以避免竞态条件
+        const requestsToProcess = new Map(updateRequests);
+        updateRequests.clear();
+
         const updatesByColumn = new Map<number, { item: LayoutItem, newHeight: number }[]>();
 
-        updateRequests.forEach((newHeight, itemId) => {
+        requestsToProcess.forEach((newHeight, itemId) => {
+            console.log(`[updateItemHeight2] Item '${itemId}' height changed to ${newHeight.toFixed(2)}px.`);
+
             const item = idToItemMap.get(itemId);
             if (!item) return;
 
@@ -177,6 +159,7 @@ export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKe
             if (!updatesByColumn.has(columnIndex)) {
                 updatesByColumn.set(columnIndex, []);
             }
+            console.log(`[updateItemHeight3] Item '${itemId}' height changed to ${newHeight.toFixed(2)}px.`);
             updatesByColumn.get(columnIndex)!.push({ item, newHeight });
         });
 
@@ -185,13 +168,14 @@ export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKe
             // 必须按 item 在列中的顺序排序
             updates.sort((a, b) => a.item.indexInColumn - b.item.indexInColumn);
             
+            // @织: 恢复到用户确认的、正确的"高度差传播"算法
             updates.forEach(({ item, newHeight }) => {
                 const oldHeight = item.height;
                 const heightDifference = newHeight - oldHeight;
                 if (heightDifference === 0) return;
 
                 // 从 R-tree 中移除旧边界
-                tree.remove(item as BushItem);
+                tree.remove(item as BushItem, (a, b) => a.id === b.id);
 
                 item.height = newHeight;
                 // 更新 R-tree 所需的边界
@@ -203,7 +187,7 @@ export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKe
                 // 更新列中后续项目的位置
                 for (let i = item.indexInColumn + 1; i < column.items.length; i++) {
                     const subsequentItem = column.items[i];
-                    tree.remove(subsequentItem as BushItem);
+                    tree.remove(subsequentItem as BushItem, (a, b) => a.id === b.id);
                     subsequentItem.y += heightDifference;
                     subsequentItem.minY = subsequentItem.y;
                     subsequentItem.maxY = subsequentItem.y + subsequentItem.height;
@@ -215,7 +199,15 @@ export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKe
             });
         });
         
-        updateRequests.clear();
+        // 更新时间戳以通知外部布局已更新
+        layoutUpdateStamp.value = Date.now();
+
+        // 检查在处理期间是否有新请求进入，如果有，则安排下一次更新
+        if (updateRequests.size > 0) {
+            updateTimer = setTimeout(processPendingUpdates, 30);
+        } else {
+            updateTimer = null;
+        }
     };
     
     const totalHeight = computed(() => {
@@ -253,5 +245,6 @@ export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKe
         updateItemHeight,
         rebuildLayout,
         findVisibleItems, // 新增方法
+        layoutUpdateStamp, // 暴露时间戳
     };
 } 
