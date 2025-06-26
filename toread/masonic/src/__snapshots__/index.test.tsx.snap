@@ -1,0 +1,110 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`<Masonry> should update when the size of the window changes: Should display one element 1`] = `
+<DocumentFragment>
+  <div
+    role="grid"
+    style="position: relative; width: 100%; max-width: 100%; height: 1600px; max-height: 1600px;"
+    tabindex="0"
+  >
+    <div
+      role="gridcell"
+      style="width: 100px; position: absolute; writing-mode: horizontal-tb; top: 0px; left: 0px;"
+    >
+      <div
+        style="width: 100%; height: 400px;"
+      >
+        <span>
+          0
+        </span>
+        Hello
+      </div>
+    </div>
+  </div>
+</DocumentFragment>
+`;
+
+exports[`<Masonry> should update when the size of the window changes: Should display two elements 1`] = `
+<DocumentFragment>
+  <div
+    role="grid"
+    style="position: relative; width: 100%; max-width: 100%; height: 1600px; max-height: 1600px;"
+    tabindex="0"
+  >
+    <div
+      role="gridcell"
+      style="width: 100px; position: absolute; writing-mode: horizontal-tb; top: 0px; left: 0px;"
+    >
+      <div
+        style="width: 100%; height: 400px;"
+      >
+        <span>
+          0
+        </span>
+        Hello
+      </div>
+    </div>
+    <div
+      role="gridcell"
+      style="width: 100px; position: absolute; writing-mode: horizontal-tb; top: 400px; left: 0px;"
+    >
+      <div
+        style="width: 100%; height: 400px;"
+      >
+        <span>
+          1
+        </span>
+        Hello
+      </div>
+    </div>
+  </div>
+</DocumentFragment>
+`;
+
+exports[`<MasonryScroller> should update when scrolling: pointer-events: none IS defined 1`] = `
+<DocumentFragment>
+  <div
+    role="grid"
+    style="position: relative; width: 100%; max-width: 100%; height: 360px; max-height: 360px; will-change: contents; pointer-events: none;"
+    tabindex="0"
+  >
+    <div
+      role="gridcell"
+      style="width: 320px; position: absolute; writing-mode: horizontal-tb; top: 0px; left: 0px;"
+    >
+      <div
+        style="width: 100%; height: 360px;"
+      >
+        <span>
+          0
+        </span>
+        Hello
+      </div>
+    </div>
+  </div>
+</DocumentFragment>
+`;
+
+exports[`<MasonryScroller> should update when scrolling: pointer-events: none is NOT defined 1`] = `
+<DocumentFragment>
+  <div
+    role="grid"
+    style="position: relative; width: 100%; max-width: 100%; height: 360px; max-height: 360px;"
+    tabindex="0"
+  >
+    <div
+      role="gridcell"
+      style="width: 320px; position: absolute; writing-mode: horizontal-tb; top: 0px; left: 0px;"
+    >
+      <div
+        style="width: 100%; height: 360px;"
+      >
+        <span>
+          0
+        </span>
+        Hello
+      </div>
+    </div>
+  </div>
+</DocumentFragment>
+`;
