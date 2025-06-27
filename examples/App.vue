@@ -4,6 +4,7 @@
       <router-link to="/simple">Simple Example</router-link>
       <router-link to="/stress-test">Stress Test (1M)</router-link>
       <router-link to="/provider-test">DataProvider Test</router-link>
+      <router-link to="/adaptive-width">Adaptive Width</router-link>
     </nav>
     <main class="app-content">
       <router-view />

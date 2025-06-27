@@ -5,7 +5,7 @@
                 <div v-for="item in visibleItems" :key="item.id" class="virtual-masonry-grid-item"
                     :style="getItemStyle(item)" :ref="setItemRef(item.id)">
                     <!-- @织: 新增逻辑，根据数据类型渲染不同插槽 -->
-                    <template v-if="item.data.isPlaceholder">
+                    <template v-if="item.isPlaceholder">
                         <slot name="placeholder" :item="item.data" :index="item.index" />
                     </template>
                     <template v-else>
@@ -23,8 +23,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, defineProps, defineEmits, watch, toRef, withDefaults, nextTick } from 'vue';
-import { useMasonryLayout, LayoutItem } from '../composables/useMasonryLayout';
+import { ref, computed, onMounted, onUnmounted, defineProps, defineEmits, watch, toRef, withDefaults, nextTick, defineExpose } from 'vue';
+import { useLayoutEngine, LayoutItem } from '../composables/useLayoutEngine';
 import { useVirtualization } from '../composables/useVirtualization';
 import { useScrollObserver } from '../composables/useScrollObserver';
 import { useVirtualScrollbar } from '../composables/useVirtualScrollbar';
@@ -33,20 +33,26 @@ import { useVirtualScrollbar } from '../composables/useVirtualScrollbar';
 interface Props {
     items: any[];
     columnWidth?: number;
+    rowHeight?: number;
     gap?: number;
     idKey?: string;
-    itemHeight?: (itemData: any, columnWidth: number) => number;
+    itemHeight?: (item: any, columnWidth: number) => number;
     overscanBy?: number;
     estimatedTotalCount?: number;
     scrollToIndex?: number;
     scrollToOptions?: ScrollIntoViewOptions;
+    mode?: 'masonry' | 'grid' | 'justified';
 }
 
 const props = withDefaults(defineProps<Props>(), {
     columnWidth: 200,
+    rowHeight: 200,
     gap: 15,
     idKey: 'id',
     overscanBy: 2,
+    itemHeight: undefined,
+    estimatedTotalCount: undefined,
+    mode: 'masonry',
 });
 
 const emit = defineEmits<{
@@ -66,14 +72,18 @@ const {
     updateItemHeight,
     rebuildLayout,
     layoutUpdateStamp,
-} = useMasonryLayout({
+    estimatedTotalCount: estimatedTotalCountRef,
+    mode,
+} = useLayoutEngine({
     containerWidth,
     columnWidth: toRef(props, 'columnWidth'),
+    rowHeight: toRef(props, 'rowHeight'),
     gap: toRef(props, 'gap'),
     items: toRef(props, 'items'),
     idKey: props.idKey,
     itemHeight: props.itemHeight,
     estimatedTotalCount: toRef(props, 'estimatedTotalCount'),
+    mode: props.mode
 });
 
 // @织: --- 虚拟滚动条 ---
@@ -228,11 +238,11 @@ watch(layoutUpdateStamp, () => {
     forceVirtualizationUpdate();
 });
 
-// @织: props.items 的变化会由 useMasonryLayout 内部的 watch 自动处理，
+// @织: props.items 的变化会由 useLayoutEngine 内部的 watch 自动处理，
 // 它会自动调用 rebuildLayout，所以顶层不再需要 watch props.items。
 
 watch([containerWidth, () => props.columnWidth, () => props.gap], () => {
-    // @织: 这个 watch 仍然需要，因为它会触发 useMasonryLayout 内部的 rebuildLayout
+    // @织: 这个 watch 仍然需要，因为它会触发 useLayoutEngine 内部的 rebuildLayout
     rebuildLayout();
 });
 

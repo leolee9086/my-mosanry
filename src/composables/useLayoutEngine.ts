@@ -2,6 +2,7 @@
 import { ref, reactive, computed, Ref, shallowRef, onMounted, onUnmounted, watch } from 'vue';
 import RBush from 'rbush';
 import { createRafScheduler } from '../utils/createRafScheduler';
+import { createSegmentTree, type SegmentTree } from '../utils/createSegmentTree';
 
 // @织: 浏览器能够安全处理的最大CSS高度 (一个比较保守的值)
 const MAX_BROWSER_HEIGHT = 15_000_000;
@@ -12,6 +13,7 @@ const MAX_BROWSER_HEIGHT = 15_000_000;
 export interface LayoutItem {
     id: any;
     data: any;
+    isPlaceholder?: boolean;
     index: number;
     columnIndex: number;
     indexInColumn: number;
@@ -31,14 +33,16 @@ export interface LayoutColumn {
     items: LayoutItem[];
 }
 
-export interface UseMasonryLayoutOptions {
+export interface UseLayoutEngineOptions {
     containerWidth: Ref<number>;
     columnWidth: Ref<number>;
+    rowHeight: Ref<number>;
     gap: Ref<number>;
     items: Ref<any[]>;
     idKey: string;
     itemHeight?: (itemData: any, columnWidth: number) => number;
     estimatedTotalCount?: Ref<number | undefined>;
+    mode?: 'masonry' | 'grid' | 'justified';
 }
 
 // @织: BushItem 不再需要是响应式的，它只是 R-Tree 的数据载体
@@ -49,6 +53,7 @@ class BushItem implements LayoutItem {
     maxY: number;
     id: any;
     data: any;
+    isPlaceholder?: boolean;
     index: number;
     columnIndex: number;
     indexInColumn: number;
@@ -60,6 +65,7 @@ class BushItem implements LayoutItem {
     constructor(item: LayoutItem) {
         this.id = item.id;
         this.data = item.data;
+        this.isPlaceholder = item.isPlaceholder;
         this.index = item.index;
         this.columnIndex = item.columnIndex;
         this.indexInColumn = item.indexInColumn;
@@ -79,9 +85,25 @@ class BushItem implements LayoutItem {
  * 一个管理瀑布流布局计算的 Vue Composable.
  * 使用 R-tree 优化空间查询和双重缓存机制优化更新性能.
  */
-export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKey, itemHeight, estimatedTotalCount }: UseMasonryLayoutOptions) {
+export function useLayoutEngine({
+    containerWidth,
+    columnWidth,
+    rowHeight,
+    gap,
+    items,
+    idKey,
+    itemHeight,
+    estimatedTotalCount,
+    mode = 'masonry', // @织: 默认是 masonry
+}: UseLayoutEngineOptions) {
     const tree = new RBush<BushItem>();
     
+    // --- Justified 模式专属状态 ---
+    let idealWidths: number[] = [];
+    let segmentTree: SegmentTree | null = null;
+    const itemAspectRatios = new Map<any, number>();
+    const DEFAULT_ASPECT_RATIO = 1; // 默认宽高比
+
     // @织: 双重缓存 - 渲染层 (shallowRef)
     // 只在批处理更新完成后整体替换，以触发一次性的、高效的视图更新
     const allItems = shallowRef<LayoutItem[]>([]); 
@@ -117,14 +139,225 @@ export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKe
     };
 
     const updateTotalHeight = () => {
-        if (columns.length === 0) {
+        if (columns.length === 0 && mode === 'masonry') {
             totalHeight.value = 0;
-        } else {
+            return;
+        }
+
+        if (mode === 'grid' || mode === 'justified') {
+            const lastItem = allItems.value[allItems.value.length - 1];
+            if (lastItem) {
+                totalHeight.value = lastItem.y + lastItem.height;
+            } else {
+                totalHeight.value = 0;
+            }
+        } else { // masonry
             totalHeight.value = Math.max(...columns.map(c => c.height));
         }
     };
 
-    const processPendingUpdates = () => {
+    const appendItemsToMasonry = (itemsToAppend: any[]) => {
+        if (itemsToAppend.length === 0) return;
+
+        const newLayoutItems: LayoutItem[] = [];
+        const newBushItems: BushItem[] = [];
+
+        itemsToAppend.forEach(itemData => {
+            const id = itemData[idKey];
+            // 防止重复添加
+            if (idToItemMap.has(id)) return;
+
+            const shortestColumn = getShortestColumn();
+            const columnIndex = shortestColumn.index;
+            
+            const newItem: LayoutItem = {
+                id,
+                data: itemData,
+                isPlaceholder: !!itemData.isPlaceholder,
+                index: allItems.value.length + newLayoutItems.length,
+                columnIndex,
+                indexInColumn: columns[columnIndex].items.length,
+                width: columnWidth.value,
+                height: itemHeight ? itemHeight(itemData, columnWidth.value) : columnWidth.value,
+                x: columnIndex * (columnWidth.value + gap.value),
+                y: shortestColumn.height,
+                minX: 0, minY: 0, maxX: 0, maxY: 0 // 将在 BushItem 中计算
+            };
+            
+            columns[columnIndex].items.push(newItem);
+            columns[columnIndex].height += newItem.height + gap.value;
+            idToItemMap.set(id, newItem);
+            
+            newBushItems.push(new BushItem(newItem));
+            newLayoutItems.push(newItem);
+        });
+
+        // @织: 批量更新
+        if (newLayoutItems.length > 0) {
+            tree.load(newBushItems);
+            allItems.value = [...allItems.value, ...newLayoutItems];
+            updateTotalHeight(); // 手动更新总高度
+            layoutUpdateStamp.value = Date.now();
+        }
+    };
+
+    const appendItemsToGrid = (itemsToAppend: any[]) => {
+        if (itemsToAppend.length === 0) return;
+
+        const newLayoutItems: LayoutItem[] = [];
+        const newBushItems: BushItem[] = [];
+
+        itemsToAppend.forEach(itemData => {
+            const id = itemData[idKey];
+            // 防止重复添加
+            if (idToItemMap.has(id)) return;
+
+            const shortestColumn = getShortestColumn();
+            const columnIndex = shortestColumn.index;
+            
+            const newItem: LayoutItem = {
+                id,
+                data: itemData,
+                isPlaceholder: !!itemData.isPlaceholder,
+                index: allItems.value.length + newLayoutItems.length,
+                columnIndex,
+                indexInColumn: columns[columnIndex].items.length,
+                width: columnWidth.value,
+                height: itemHeight ? itemHeight(itemData, columnWidth.value) : columnWidth.value,
+                x: columnIndex * (columnWidth.value + gap.value),
+                y: shortestColumn.height,
+                minX: 0, minY: 0, maxX: 0, maxY: 0 // 将在 BushItem 中计算
+            };
+            
+            columns[columnIndex].items.push(newItem);
+            columns[columnIndex].height += newItem.height + gap.value;
+            idToItemMap.set(id, newItem);
+            
+            newBushItems.push(new BushItem(newItem));
+            newLayoutItems.push(newItem);
+        });
+
+        // @织: 批量更新
+        if (newLayoutItems.length > 0) {
+            tree.load(newBushItems);
+            allItems.value = [...allItems.value, ...newLayoutItems];
+            updateTotalHeight(); // 手动更新总高度
+            layoutUpdateStamp.value = Date.now();
+        }
+    };
+
+    const partitionAndLayoutJustified = (startIndex = 0) => {
+        if (!segmentTree) return;
+
+        const containerW = containerWidth.value;
+        const newLayoutItems: LayoutItem[] = startIndex > 0 ? allItems.value.slice(0, startIndex) : [];
+        
+        let currentItemIndex = startIndex;
+        let currentY = 0;
+
+        if (startIndex > 0) {
+            const prevItem = newLayoutItems[startIndex - 1];
+            if (prevItem) {
+                currentY = prevItem.y + prevItem.height + gap.value;
+            }
+        }
+        
+        const totalItems = items.value.length;
+
+        while(currentItemIndex < totalItems) {
+            // 1. 估算当前行能放下多少项目
+            const avgIdealWidth = segmentTree.query(currentItemIndex, totalItems - 1) / (totalItems - currentItemIndex);
+            const itemsPerRow = avgIdealWidth > 0 ? Math.max(1, Math.floor(containerW / (avgIdealWidth + gap.value))) : 1;
+
+            // 2. 使用分段树精确查找断点
+            const idealTotalWidthWithoutGap = containerW - (itemsPerRow - 1) * gap.value;
+            const rowInfo = segmentTree.findBreakpoint(currentItemIndex, idealTotalWidthWithoutGap);
+            let endIndex = rowInfo.endIndex;
+
+            if (endIndex < currentItemIndex) {
+                endIndex = currentItemIndex;
+            }
+            
+            const rowItemsData = items.value.slice(currentItemIndex, endIndex + 1);
+            
+            // 3. 处理最后一行
+            const isLastRow = endIndex === totalItems - 1;
+            if (isLastRow) {
+                let currentX = 0;
+                rowItemsData.forEach((itemData, indexInRow) => {
+                    const itemIndex = currentItemIndex + indexInRow;
+                    const idealW = idealWidths[itemIndex];
+                    newLayoutItems[itemIndex] = {
+                        id: itemData[idKey], data: itemData, index: itemIndex,
+                        isPlaceholder: !!itemData.isPlaceholder,
+                        width: idealW, height: rowHeight.value, x: currentX, y: currentY,
+                        minX: currentX, minY: currentY, maxX: currentX + idealW, maxY: currentY + rowHeight.value,
+                        columnIndex: indexInRow, indexInColumn: 0,
+                    };
+                    currentX += idealW + gap.value;
+                });
+                currentY += rowHeight.value + gap.value;
+            } else {
+                 // 4. 计算缩放比例并布局
+                const rowIdealWidth = rowInfo.sum;
+                const rowGapTotal = (rowItemsData.length - 1) * gap.value;
+                const scale = (containerW - rowGapTotal) / rowIdealWidth;
+                const finalRowHeight = rowHeight.value * scale;
+
+                let currentX = 0;
+                rowItemsData.forEach((itemData, indexInRow) => {
+                    const itemIndex = currentItemIndex + indexInRow;
+                    const idealW = idealWidths[itemIndex];
+                    const finalWidth = idealW * scale;
+                    newLayoutItems[itemIndex] = {
+                        id: itemData[idKey], data: itemData, index: itemIndex,
+                        isPlaceholder: !!itemData.isPlaceholder,
+                        width: finalWidth, height: finalRowHeight, x: currentX, y: currentY,
+                        minX: currentX, minY: currentY, maxX: currentX + finalWidth, maxY: currentY + finalRowHeight,
+                        columnIndex: indexInRow, indexInColumn: 0,
+                    };
+                    currentX += finalWidth + gap.value;
+                });
+                currentY += finalRowHeight + gap.value;
+            }
+           
+            currentItemIndex = endIndex + 1;
+        }
+
+        allItems.value = newLayoutItems;
+        idToItemMap.clear();
+        newLayoutItems.forEach(item => {
+            if (item) idToItemMap.set(item.id, item)
+        });
+        
+        updateTotalHeight();
+        layoutUpdateStamp.value = Date.now();
+    };
+
+    const appendItemsToJustified = (itemsToAppend: any[]) => {
+        if (itemsToAppend.length === 0) return;
+
+        const newIdealWidths = itemsToAppend.map(itemData => {
+            const aspectRatio = itemAspectRatios.get(itemData[idKey]) || DEFAULT_ASPECT_RATIO;
+            return rowHeight.value * aspectRatio;
+        });
+
+        idealWidths.push(...newIdealWidths);
+        segmentTree = createSegmentTree(idealWidths);
+        partitionAndLayoutJustified(0);
+    }
+
+    const appendItems = (itemsToAppend: any[]) => {
+        if (mode === 'grid') {
+            appendItemsToGrid(itemsToAppend);
+        } else if (mode === 'justified') {
+            appendItemsToJustified(itemsToAppend);
+        } else {
+            appendItemsToMasonry(itemsToAppend);
+        }
+    };
+
+    const processPendingUpdatesForMasonry = () => {
         if (pendingUpdates.size === 0) {
             return;
         }
@@ -176,6 +409,106 @@ export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKe
             layoutUpdateStamp.value = Date.now();
         }
     };
+    
+    const processPendingUpdatesGrid = () => {
+        // @织: 当单个项目高度变化时，需要重新计算整行的最大高度，并更新该行所有项目的高度和后续所有行的Y坐标
+        if (pendingUpdates.size === 0) return;
+        
+        const updatesToProcess = new Map(pendingUpdates);
+        pendingUpdates.clear();
+
+        const changedRows = new Set<number>(); // 记录发生变化的行的 indexInColumn
+
+        updatesToProcess.forEach((newHeight, id) => {
+            const item = idToItemMap.get(id);
+            if (!item || item.height === newHeight) return;
+
+            item.height = newHeight;
+            changedRows.add(item.indexInColumn);
+        });
+
+        if (changedRows.size === 0) return;
+
+        // 对所有受影响的行进行重新计算
+        const sortedChangedRows = Array.from(changedRows).sort((a, b) => a - b);
+        
+        sortedChangedRows.forEach(rowIndex => {
+            const rowStartIndex = rowIndex * columnCount.value;
+            const rowEndIndex = rowStartIndex + columnCount.value;
+            const rowItems = allItems.value.slice(rowStartIndex, rowEndIndex);
+
+            if (rowItems.length === 0) return;
+
+            const maxRowHeight = Math.max(...rowItems.map(item => item.height));
+
+            // 更新行内所有项目的高度
+            rowItems.forEach(item => item.height = maxRowHeight);
+        });
+
+        // 从第一个发生变化的行开始，更新后续所有项目的Y坐标
+        const firstChangedRowIndex = sortedChangedRows[0];
+        let currentY = 0;
+        if (firstChangedRowIndex > 0) {
+            const prevRowIndex = (firstChangedRowIndex * columnCount.value) - 1;
+            const prevItem = allItems.value[prevRowIndex];
+            currentY = prevItem.y + prevItem.height + gap.value;
+        }
+
+        for (let i = firstChangedRowIndex * columnCount.value; i < allItems.value.length; i++) {
+            const item = allItems.value[i];
+            const isFirstInRow = item.columnIndex === 0;
+
+            if (isFirstInRow && i > firstChangedRowIndex * columnCount.value) {
+                const prevItem = allItems.value[i - 1];
+                currentY = prevItem.y + prevItem.height + gap.value;
+            }
+            item.y = currentY;
+        }
+
+        updateTotalHeight();
+        layoutUpdateStamp.value = Date.now();
+    };
+
+    const processPendingUpdatesJustified = () => {
+        if (pendingUpdates.size === 0) return;
+        
+        const updatesToProcess = new Map(pendingUpdates);
+        pendingUpdates.clear();
+
+        let minChangedIndex = Infinity;
+
+        updatesToProcess.forEach((newHeight, id) => {
+            const item = idToItemMap.get(id);
+            if (!item || item.height === newHeight) return;
+
+            const oldAspectRatio = itemAspectRatios.get(id) || DEFAULT_ASPECT_RATIO;
+            const newAspectRatio = item.width / newHeight;
+            itemAspectRatios.set(id, newAspectRatio);
+
+            if (segmentTree && Math.abs(oldAspectRatio - newAspectRatio) > 1e-6) {
+                const newIdealWidth = rowHeight.value * newAspectRatio;
+                segmentTree.update(item.index, newIdealWidth);
+                idealWidths[item.index] = newIdealWidth;
+                if (item.index < minChangedIndex) {
+                    minChangedIndex = item.index;
+                }
+            }
+        });
+
+        if (minChangedIndex !== Infinity) {
+            partitionAndLayoutJustified(minChangedIndex);
+        }
+    }
+
+    const processPendingUpdates = () => {
+        if (mode === 'grid') {
+            processPendingUpdatesGrid();
+        } else if (mode === 'justified') {
+            processPendingUpdatesJustified();
+        } else {
+            processPendingUpdatesForMasonry();
+        }
+    };
 
     const scheduleProcessing = createRafScheduler(processPendingUpdates);
 
@@ -208,57 +541,25 @@ export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKe
         return Math.min(logicalScrollHeight.value, MAX_BROWSER_HEIGHT);
     });
 
-    // @织: 将 rebuildLayout 拆分为完全重建和增量添加
-    const appendItems = (itemsToAppend: any[]) => {
-        if (itemsToAppend.length === 0) return;
-
-        const newLayoutItems: LayoutItem[] = [];
-        const newBushItems: BushItem[] = [];
-
-        itemsToAppend.forEach(itemData => {
-            const id = itemData[idKey];
-            // 防止重复添加
-            if (idToItemMap.has(id)) return;
-
-            const shortestColumn = getShortestColumn();
-            const columnIndex = shortestColumn.index;
-            
-            const newItem: LayoutItem = {
-                id,
-                data: itemData,
-                index: allItems.value.length + newLayoutItems.length,
-                columnIndex,
-                indexInColumn: columns[columnIndex].items.length,
-                width: columnWidth.value,
-                height: itemHeight ? itemHeight(itemData, columnWidth.value) : columnWidth.value,
-                x: columnIndex * (columnWidth.value + gap.value),
-                y: shortestColumn.height,
-                minX: 0, minY: 0, maxX: 0, maxY: 0 // 将在 BushItem 中计算
-            };
-            
-            columns[columnIndex].items.push(newItem);
-            columns[columnIndex].height += newItem.height + gap.value;
-            idToItemMap.set(id, newItem);
-            
-            newBushItems.push(new BushItem(newItem));
-            newLayoutItems.push(newItem);
-        });
-
-        // @织: 批量更新
-        if (newLayoutItems.length > 0) {
-            tree.load(newBushItems);
-            allItems.value = [...allItems.value, ...newLayoutItems];
-            updateTotalHeight(); // 手动更新总高度
-            layoutUpdateStamp.value = Date.now();
-        }
-    };
-    
     const rebuildLayout = () => {
-        initializeColumns();
         tree.clear();
         idToItemMap.clear();
+        const existingItems = [...items.value];
         allItems.value = [];
-        appendItems(items.value);
+        
+        if (mode === 'masonry' || mode === 'grid') {
+            initializeColumns();
+            if (mode === 'masonry') appendItemsToMasonry(existingItems);
+            else appendItemsToGrid(existingItems);
+        } else if (mode === 'justified') {
+            totalHeight.value = 0;
+            idealWidths = [];
+            segmentTree = null;
+            itemAspectRatios.clear();
+            appendItemsToJustified(existingItems);
+        } else {
+             updateTotalHeight();
+        }
     };
 
     // @织: 关键! 监听外部 items 数组的变化

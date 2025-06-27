@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { ref, computed, watch, Ref } from 'vue';
-import type { LayoutItem } from './useMasonryLayout';
+import type { LayoutItem } from './useLayoutEngine';
 
 /**
  * 虚拟化计算器的选项

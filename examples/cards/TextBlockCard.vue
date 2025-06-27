@@ -1,11 +1,8 @@
 <template>
-    <div class="text-block-card" :style="{ backgroundColor: item.color }">
-        <h3>{{ item.title }}</h3>
-        <p>{{ item.content }}</p>
-        <div class="card-footer">
-            ID: {{ item.id }}
-        </div>
-    </div>
+  <div class="text-card">
+    <h3>{{ item.title }}</h3>
+    <p>{{ item.content }}</p>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -25,32 +22,28 @@ const props = defineProps<{
 </script>
 
 <style scoped>
-.text-block-card {
-    padding: 15px;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    box-sizing: border-box;
-    width: 100%;
-    display: flex;
-    flex-direction: column;
+.text-card {
+  width: 100%;
+  height: 100%;
+  padding: 12px;
+  box-sizing: border-box;
+  background-color: #f0f8ff;
+  border: 1px solid #d4e7f7;
+  border-radius: 8px;
+  color: #333;
+  overflow-wrap: break-word;
+  display: flex;
+  flex-direction: column;
 }
-.text-block-card h3 {
-    margin: 0 0 10px 0;
-    font-size: 1.1em;
-    word-break: break-word;
+h3 {
+  margin: 0 0 8px 0;
+  font-size: 1.1em;
+  font-weight: 600;
 }
-.text-block-card p {
-    flex-grow: 1;
-    margin: 0;
-    font-size: 0.9em;
-    line-height: 1.5;
-    word-break: break-word;
-}
-.card-footer {
-    margin-top: 10px;
-    font-size: 0.8em;
-    color: #666;
-    border-top: 1px solid rgba(0,0,0,0.05);
-    padding-top: 5px;
+p {
+  margin: 0;
+  font-size: 0.95em;
+  line-height: 1.5;
+  flex-grow: 1;
 }
 </style> 
