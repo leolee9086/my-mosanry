@@ -35,6 +35,7 @@ interface Props {
     columnWidth?: number;
     gap?: number;
     idKey?: string;
+    itemHeight?: (itemData: any, columnWidth: number) => number;
     overscanBy?: number;
     estimatedTotalCount?: number;
     scrollToIndex?: number;
@@ -71,6 +72,7 @@ const {
     gap: toRef(props, 'gap'),
     items: toRef(props, 'items'),
     idKey: props.idKey,
+    itemHeight: props.itemHeight,
     estimatedTotalCount: toRef(props, 'estimatedTotalCount'),
 });
 

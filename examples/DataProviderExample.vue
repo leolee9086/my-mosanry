@@ -10,6 +10,7 @@
         :min-column-width="200"
         :max-column-width="350"
         :gap="15"
+        :item-height="getItemHeight"
       >
         <template #default="{ item }">
           <ImageCard :item="item" />
@@ -112,6 +113,22 @@ const fetchData: DataFetcher = async (indices: number[]) => {
 
   console.log(`%c--> Fetched ${indicesToFetch.length} new items. Total returned: ${finalResults.length}`, 'color: green');
   return finalResults;
+};
+
+/**
+ * @织: 瀑布流的最后一个核心优化：预知高度。
+ * 在渲染前告诉组件每个项目的精确高度，从而彻底消除布局抖动。
+ * @param item - 数据项，可能是占位符或真实数据
+ * @param columnWidth - 当前列的宽度
+ * @returns {number} - 项目的精确高度
+ */
+const getItemHeight = (item: any, columnWidth: number): number => {
+  // 如果是占位符，我们返回一个固定的、预估的高度
+  if (item.isPlaceholder) {
+    return 250;
+  }
+  // 如果是真实数据，我们根据其宽高比，计算出在当前列宽下的精确高度
+  return columnWidth / item.aspectRatio;
 };
 </script>
 

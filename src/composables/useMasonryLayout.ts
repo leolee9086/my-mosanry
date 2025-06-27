@@ -37,6 +37,7 @@ export interface UseMasonryLayoutOptions {
     gap: Ref<number>;
     items: Ref<any[]>;
     idKey: string;
+    itemHeight?: (itemData: any, columnWidth: number) => number;
     estimatedTotalCount?: Ref<number | undefined>;
 }
 
@@ -78,7 +79,7 @@ class BushItem implements LayoutItem {
  * 一个管理瀑布流布局计算的 Vue Composable.
  * 使用 R-tree 优化空间查询和双重缓存机制优化更新性能.
  */
-export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKey, estimatedTotalCount }: UseMasonryLayoutOptions) {
+export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKey, itemHeight, estimatedTotalCount }: UseMasonryLayoutOptions) {
     const tree = new RBush<BushItem>();
     
     // @织: 双重缓存 - 渲染层 (shallowRef)
@@ -229,7 +230,7 @@ export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKe
                 columnIndex,
                 indexInColumn: columns[columnIndex].items.length,
                 width: columnWidth.value,
-                height: columnWidth.value, // 初始高度
+                height: itemHeight ? itemHeight(itemData, columnWidth.value) : columnWidth.value,
                 x: columnIndex * (columnWidth.value + gap.value),
                 y: shortestColumn.height,
                 minX: 0, minY: 0, maxX: 0, maxY: 0 // 将在 BushItem 中计算
