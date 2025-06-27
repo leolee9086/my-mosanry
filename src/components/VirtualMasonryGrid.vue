@@ -31,6 +31,8 @@ interface Props {
     idKey?: string;
     overscanBy?: number;
     estimatedTotalCount?: number;
+    scrollToIndex?: number;
+    scrollToOptions?: ScrollIntoViewOptions;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -90,6 +92,28 @@ const { visibleItems, forceUpdate: forceVirtualizationUpdate } = useVirtualizati
 const contentStyle = computed(() => ({
     height: `${contentHeight.value}px`,
 }));
+
+// @织: 滚动到指定项
+watch(() => props.scrollToIndex, (newIndex) => {
+    if (newIndex === undefined || newIndex < 0 || !scrollContainer.value) return;
+
+    // @织: 未来这里需要从 layout aitems 中找到精确的 y
+    // @织: 目前我们先用一个估算值来测试
+    const targetItem = allItems.value.find(item => item.index === newIndex);
+    
+    if (targetItem) {
+        const targetY = targetItem.y;
+        scrollContainer.value.scrollTo({
+            top: targetY,
+            behavior: props.scrollToOptions?.behavior || 'smooth',
+        });
+    } else {
+        // @织: 如果目标项还未被渲染（在很远的地方），
+        // @织: 我们可以先滚动到一个估算的位置。
+        // @织: 这个逻辑将在“主动数据请求”架构中变得更重要。
+        console.warn(`[VirtualMasonryGrid] scrollToIndex: 无法立即找到索引 ${newIndex} 的项。`);
+    }
+});
 
 // @织: 将样式计算移至组件内部，确保响应性
 const getStyle = (item: LayoutItem) => ({

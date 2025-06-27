@@ -12,10 +12,16 @@
                 <label for="estimated-count">预估总数:</label>
                 <input id="estimated-count" type="number" v-model.number="estimatedCount" />
             </div>
-
+            <div class="controls">
+                <label for="scroll-to-index">滚动到:</label>
+                <input id="scroll-to-index" type="number" v-model.number="targetIndexInput" @keydown.enter="scrollToTarget" />
+                <button @click="scrollToTarget">Go</button>
+            </div>
         </div>
         <VirtualMasonryGrid class="grid-container" :items="items" :column-width="220" :gap="15" id-key="id"
-            :estimated-total-count="estimatedCount" @load-more="loadMoreItems">
+            :estimated-total-count="estimatedCount" 
+            :scroll-to-index="finalTargetIndex"
+            @load-more="loadMoreItems">
             <template #default="{ item, isScrolling }">
                 <component :is="item.cardType" :item="item" :is-scrolling="isScrolling" />
             </template>
@@ -35,9 +41,17 @@ let itemIdCounter = 0;
 
 const items = shallowRef<any[]>([]);
 const isLoading = ref(false);
-const estimatedCount = ref(TOTAL_ITEMS); // <-- 加上这行
+const estimatedCount = ref(TOTAL_ITEMS);
+
+// @织: 新增，用于 scrollToIndex
+const targetIndexInput = ref<number>(0);
+const finalTargetIndex = ref<number | undefined>(undefined);
 
 const cardComponents = markRaw([ImageCard, TextBlockCard]);
+
+const scrollToTarget = () => {
+    finalTargetIndex.value = targetIndexInput.value;
+};
 
 const generateItems = (count: number) => {
     if (items.value.length >= TOTAL_ITEMS) return [];
@@ -131,6 +145,22 @@ loadMoreItems();
     border-radius: 4px;
     padding: 4px 8px;
     font-family: inherit;
+}
+
+.stats-bar .controls button {
+    margin-left: 8px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 4px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: bold;
+}
+
+.stats-bar .controls button:hover {
+    background-color: #0056b3;
 }
 
 .stats-bar .divider {
