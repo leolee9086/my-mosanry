@@ -23,6 +23,7 @@
   "license": "MIT",
   "dependencies": {
     "@types/rbush": "^4.0.0",
+    "p-queue": "^8.1.0",
     "rbush": "^4.0.1",
     "vue": "^3.5.17",
     "vue-router": "^4.5.1"

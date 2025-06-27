@@ -14,8 +14,10 @@ export interface UseScrollObserverOptions {
 export function useScrollObserver({ scrollContainer, onLoadMore, totalHeight }: UseScrollObserverOptions) {
     const scrollTop = ref(0);
     const isScrolling = ref(false);
+    const isScrollIgnored = ref(false);
 
     let scrollTimeout: ReturnType<typeof setTimeout> | null = null;
+    let ignoreTimeout: ReturnType<typeof setTimeout> | null = null;
 
     const checkForLoadMore = () => {
         const container = scrollContainer.value;
@@ -31,7 +33,7 @@ export function useScrollObserver({ scrollContainer, onLoadMore, totalHeight }: 
     };
 
     const handleScroll = throttle(() => {
-        if (!scrollContainer.value) return;
+        if (!scrollContainer.value || isScrollIgnored.value) return;
 
         scrollTop.value = scrollContainer.value.scrollTop;
 
@@ -45,6 +47,20 @@ export function useScrollObserver({ scrollContainer, onLoadMore, totalHeight }: 
 
         checkForLoadMore();
     }, 50);
+
+    /**
+     * @织: 新增方法：在指定时间内忽略滚动事件
+     * @param duration - 忽略的毫秒数
+     */
+    const ignoreScrollEventsFor = (duration: number) => {
+        isScrollIgnored.value = true;
+        if (ignoreTimeout) {
+            clearTimeout(ignoreTimeout);
+        }
+        ignoreTimeout = setTimeout(() => {
+            isScrollIgnored.value = false;
+        }, duration);
+    };
 
     watch(totalHeight, () => {
         requestAnimationFrame(checkForLoadMore);
@@ -63,10 +79,14 @@ export function useScrollObserver({ scrollContainer, onLoadMore, totalHeight }: 
         if (scrollTimeout) {
             clearTimeout(scrollTimeout);
         }
+        if (ignoreTimeout) {
+            clearTimeout(ignoreTimeout);
+        }
     });
 
     return {
         scrollTop,
         isScrolling,
+        ignoreScrollEventsFor,
     };
 } 

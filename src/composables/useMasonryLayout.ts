@@ -86,12 +86,15 @@ export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKe
     const allItems = shallowRef<LayoutItem[]>([]); 
     
     // @织: 双重缓存 - 计算层 (普通对象)
-    // 所有计算都在这里进行，避免不必要的响应式开销
+    // @织: 关键性能优化：将 columns 从 ref 改造为普通数组，避免在计算循环中产生响应式开销
     const idToItemMap = new Map<any, LayoutItem>();
-    const columns = ref<LayoutColumn[]>([]);
+    let columns: LayoutColumn[] = [];
 
     const pendingUpdates = new Map<number, number>();
     const layoutUpdateStamp = ref(Date.now());
+
+    // @织: 将 totalHeight 从 computed 改为 ref，手动更新
+    const totalHeight = ref(0);
 
     const columnCount = computed(() => {
         if (!containerWidth.value || !columnWidth.value) return 1;
@@ -99,17 +102,25 @@ export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKe
     });
 
     const initializeColumns = () => {
-        columns.value = Array.from({ length: columnCount.value }, () => ({ height: 0, items: [] }));
+        columns = Array.from({ length: columnCount.value }, () => ({ height: 0, items: [] }));
     };
 
     const getShortestColumn = (): { index: number; height: number } => {
         let shortest = { index: -1, height: Infinity };
-        columns.value.forEach((col, index) => {
+        columns.forEach((col, index) => {
             if (col.height < shortest.height) {
                 shortest = { index, height: col.height };
             }
         });
         return shortest;
+    };
+
+    const updateTotalHeight = () => {
+        if (columns.length === 0) {
+            totalHeight.value = 0;
+        } else {
+            totalHeight.value = Math.max(...columns.map(c => c.height));
+        }
     };
 
     const processPendingUpdates = () => {
@@ -143,7 +154,7 @@ export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKe
 
         if (changedColumns.size > 0) {
             changedColumns.forEach((minChangedIndexInColumn, columnIndex) => {
-                const column = columns.value[columnIndex];
+                const column = columns[columnIndex];
                 if (!column) return;
 
                 // Start from the first changed item in the column
@@ -158,6 +169,9 @@ export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKe
                 }
                 column.height = currentY - (gap?.value ?? 0);
             });
+
+            // @织: 所有列计算完毕后，手动更新总高度
+            updateTotalHeight();
             layoutUpdateStamp.value = Date.now();
         }
     };
@@ -172,11 +186,6 @@ export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKe
         pendingUpdates.set(id, height);
         scheduleProcessing();
     };
-
-    const totalHeight = computed(() => {
-        if (columns.value.length === 0) return 0;
-        return Math.max(...columns.value.map(c => c.height));
-    });
 
     const logicalScrollHeight = computed(() => {
         const estimatedCount = estimatedTotalCount?.value;
@@ -203,6 +212,8 @@ export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKe
         if (itemsToAppend.length === 0) return;
 
         const newLayoutItems: LayoutItem[] = [];
+        const newBushItems: BushItem[] = [];
+
         itemsToAppend.forEach(itemData => {
             const id = itemData[idKey];
             // 防止重复添加
@@ -216,23 +227,29 @@ export function useMasonryLayout({ containerWidth, columnWidth, gap, items, idKe
                 data: itemData,
                 index: allItems.value.length + newLayoutItems.length,
                 columnIndex,
-                indexInColumn: columns.value[columnIndex].items.length,
+                indexInColumn: columns[columnIndex].items.length,
                 width: columnWidth.value,
                 height: columnWidth.value, // 初始高度
                 x: columnIndex * (columnWidth.value + gap.value),
                 y: shortestColumn.height,
                 minX: 0, minY: 0, maxX: 0, maxY: 0 // 将在 BushItem 中计算
             };
-
-            columns.value[columnIndex].items.push(newItem);
-            columns.value[columnIndex].height += newItem.height + gap.value;
+            
+            columns[columnIndex].items.push(newItem);
+            columns[columnIndex].height += newItem.height + gap.value;
             idToItemMap.set(id, newItem);
-            tree.insert(new BushItem(newItem));
+            
+            newBushItems.push(new BushItem(newItem));
             newLayoutItems.push(newItem);
         });
 
-        allItems.value = [...allItems.value, ...newLayoutItems];
-        layoutUpdateStamp.value = Date.now();
+        // @织: 批量更新
+        if (newLayoutItems.length > 0) {
+            tree.load(newBushItems);
+            allItems.value = [...allItems.value, ...newLayoutItems];
+            updateTotalHeight(); // 手动更新总高度
+            layoutUpdateStamp.value = Date.now();
+        }
     };
     
     const rebuildLayout = () => {

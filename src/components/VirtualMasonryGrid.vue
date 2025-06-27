@@ -3,9 +3,15 @@
         <div class="virtual-masonry-grid-container" ref="scrollContainer">
             <div class="virtual-masonry-grid-content" :style="contentStyle">
                 <div v-for="item in visibleItems" :key="item.id" class="virtual-masonry-grid-item"
-                    :style="getStyle(item)" :ref="setItemRef(item.id)">
-                    <!-- 作用域插槽，对用户完全透明 -->
-                    <slot name="default" :item="item.data" :index="item.index" :isScrolling="isScrolling" />
+                    :style="getItemStyle(item)" :ref="setItemRef(item.id)">
+                    <!-- @织: 新增逻辑，根据数据类型渲染不同插槽 -->
+                    <template v-if="item.data.isPlaceholder">
+                        <slot name="placeholder" :item="item.data" :index="item.index" />
+                    </template>
+                    <template v-else>
+                        <slot name="default" :item="item.data" :index="item.index" :isScrolling="isScrolling" />
+                    </template>
+                    
                 </div>
             </div>
         </div>
@@ -44,8 +50,8 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
     (e: 'load-more'): void;
+    (e: 'scroll-settled', visibleItemIndices: number[]): void;
 }>();
-
 const scrollContainer = ref<HTMLElement | null>(null);
 const containerWidth = ref(0);
 const containerHeight = ref(0);
@@ -74,12 +80,18 @@ const { thumbRef, trackRef } = useVirtualScrollbar({
     totalHeight: totalHeight,
 });
 
+
 // --- 2. 滚动观察者 ---
-const { scrollTop, isScrolling } = useScrollObserver({
+const { scrollTop, isScrolling, ignoreScrollEventsFor } = useScrollObserver({
     scrollContainer,
     totalHeight: totalHeight, // @织: 使用已加载内容的真实高度来判断是否需要加载更多
     onLoadMore: () => emit('load-more'),
 });
+// @织: 新增 defineExpose，将内部方法暴露给父组件
+defineExpose({
+    ignoreScrollEventsFor,
+});
+
 
 // --- 3. 虚拟化计算器 (适配 allItems) ---
 const { visibleItems, forceUpdate: forceVirtualizationUpdate } = useVirtualization({
@@ -92,6 +104,25 @@ const { visibleItems, forceUpdate: forceVirtualizationUpdate } = useVirtualizati
 const contentStyle = computed(() => ({
     height: `${contentHeight.value}px`,
 }));
+
+// @织: 记录上一次滚动停止的位置
+const lastSettledScrollTop = ref(-1);
+
+// @织: 监听滚动停止事件
+watch(isScrolling, (scrolling) => {
+    // 当滚动停止时
+    if (!scrolling) {
+        // 并且滚动位置确实发生了变化
+        if (scrollTop.value !== lastSettledScrollTop.value) {
+            const visibleIndices = visibleItems.value.map(item => item.index);
+            if (visibleIndices.length > 0) {
+                emit('scroll-settled', visibleIndices);
+            }
+            // 更新最后的位置
+            lastSettledScrollTop.value = scrollTop.value;
+        }
+    }
+});
 
 // @织: 滚动到指定项
 watch(() => props.scrollToIndex, (newIndex) => {
@@ -110,19 +141,18 @@ watch(() => props.scrollToIndex, (newIndex) => {
     } else {
         // @织: 如果目标项还未被渲染（在很远的地方），
         // @织: 我们可以先滚动到一个估算的位置。
-        // @织: 这个逻辑将在“主动数据请求”架构中变得更重要。
+        // @织: 这个逻辑将在"主动数据请求"架构中变得更重要。
         console.warn(`[VirtualMasonryGrid] scrollToIndex: 无法立即找到索引 ${newIndex} 的项。`);
     }
 });
 
 // @织: 将样式计算移至组件内部，确保响应性
-const getStyle = (item: LayoutItem) => ({
+const getItemStyle = (item: LayoutItem) => ({
     position: 'absolute' as const,
     top: `${item.y}px`,
     left: `${item.x}px`,
     width: `${item.width}px`,
-    height: `${item.height}px`,
-    transition: 'top 0.3s ease, left 0.3s ease, height 0.3s ease',
+    transition: 'top 0.3s, left 0.3s',
 });
 
 // --- DOM Refs and Measurement ---
@@ -205,30 +235,20 @@ watch([containerWidth, () => props.columnWidth, () => props.gap], () => {
 });
 
 // --- 生命周期与 DOM 观察 ---
-let resizeObserver: ResizeObserver;
 onMounted(() => {
-    if (scrollContainer.value) {
-        resizeObserver = new ResizeObserver(entries => {
-            const entry = entries[0];
-            if (entry) {
-                containerWidth.value = entry.contentRect.width;
-                containerHeight.value = entry.contentRect.height;
-            }
-        });
-        resizeObserver.observe(scrollContainer.value);
-        containerWidth.value = scrollContainer.value.clientWidth;
-        containerHeight.value = scrollContainer.value.clientHeight;
-    }
-    // @织: 初始加载时，rebuildLayout 会被自动调用一次
-    // 首次的 virtualiation update 会在 allItems 的 watch 中被触发
-});
+    if (!scrollContainer.value) return;
+    const resizeObserver = new ResizeObserver(entries => {
+        if (entries[0]) {
+            const { width, height } = entries[0].contentRect;
+            containerWidth.value = width;
+            containerHeight.value = height;
+        }
+    });
+    resizeObserver.observe(scrollContainer.value);
 
-onUnmounted(() => {
-    if (resizeObserver && scrollContainer.value) {
-        resizeObserver.unobserve(scrollContainer.value);
-    }
-    ro.disconnect();
-    // @织: 移除旧的 mutationObservers 清理逻辑
+    onUnmounted(() => {
+        resizeObserver.disconnect();
+    });
 });
 
 </script>

@@ -21,7 +21,8 @@
         <VirtualMasonryGrid class="grid-container" :items="items" :column-width="220" :gap="15" id-key="id"
             :estimated-total-count="estimatedCount" 
             :scroll-to-index="finalTargetIndex"
-            @load-more="loadMoreItems">
+            @load-more="loadMoreItems"
+            @scroll-settled="handleScrollSettled">
             <template #default="{ item, isScrolling }">
                 <component :is="item.cardType" :item="item" :is-scrolling="isScrolling" />
             </template>
@@ -51,6 +52,10 @@ const cardComponents = markRaw([ImageCard, TextBlockCard]);
 
 const scrollToTarget = () => {
     finalTargetIndex.value = targetIndexInput.value;
+};
+
+const handleScrollSettled = (visibleIndices: number[]) => {
+    console.log('滚动停止，可见项索引:', visibleIndices);
 };
 
 const generateItems = (count: number) => {
