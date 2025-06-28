@@ -16,7 +16,7 @@
 </template>
 
 <script setup lang="ts">
-import { toRef, type VNodeProps, ref } from 'vue';
+import { toRef, type VNodeProps, ref, nextTick } from 'vue';
 import { useVirtualDataSource, type DataFetcher } from '../composables/useVirtualDataSource';
 import VirtualMasonryGrid from './VirtualMasonryGrid.vue';
 
@@ -48,16 +48,43 @@ const { items, requestDataForRange } = useVirtualDataSource({
   dataFetcher: props.dataFetcher,
 });
 
-const handleScrollSettled = (visibleIndices: number[]) => {
+const handleScrollSettled = async (visibleIndices: number[]) => {
   if (visibleIndices.length === 0) return;
   
-  requestDataForRange(visibleIndices).then((fetchedItems) => {
+  // 加载数据前禁用布局动画，防止占位符被替换时的布局抖动
+  if (gridRef.value) {
+    gridRef.value.setTransitionEnabled(false);
+  }
+  
+  try {
+    const fetchedItems = await requestDataForRange(visibleIndices);
+    
     // @织: 只有当实际获取到新数据时，才可能发生布局抖动
     if (fetchedItems && fetchedItems.length > 0 && gridRef.value) {
-      // @织: 命令 grid 在接下来 100ms 内忽略滚动事件
-      gridRef.value.ignoreScrollEventsFor(100);
+      // @织: 命令 grid 在接下来 200ms 内忽略滚动事件
+      gridRef.value.ignoreScrollEventsFor(200);
+      
+      // 等待DOM更新完成后再启用过渡动画
+      await nextTick();
+      // 使用 requestAnimationFrame 确保在下一帧渲染前启用过渡
+      requestAnimationFrame(() => {
+        if (gridRef.value) {
+          gridRef.value.setTransitionEnabled(true);
+        }
+      });
+    } else {
+      // 没有新数据时也要恢复动画状态
+      if (gridRef.value) {
+        gridRef.value.setTransitionEnabled(true);
+      }
     }
-  });
+  } catch (error) {
+    // 发生错误时确保恢复动画状态
+    console.error('[VirtualMasonryDataProvider] 数据加载错误:', error);
+    if (gridRef.value) {
+      gridRef.value.setTransitionEnabled(true);
+    }
+  }
 };
 
 </script> 

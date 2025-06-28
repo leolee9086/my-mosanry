@@ -71,6 +71,9 @@ const { scrollTop, isScrolling, ignoreScrollEventsFor } = useScrollObserver({
     onLoadMore: () => emit('load-more'),
 });
 
+// 保存滚动位置相关的状态
+const savedScrollRatio = ref(-1);
+
 // --- 1. 布局引擎 (已重构为双缓存) ---
 const {
     allItems,
@@ -92,7 +95,32 @@ const {
     itemHeight: props.itemHeight,
     estimatedTotalCount: toRef(props, 'estimatedTotalCount'),
     mode: props.mode,
-    totalHeight: totalHeight, 
+    totalHeight: totalHeight,
+    // 传入保存/恢复滚动位置的回调函数
+    onBeforeRebuildLayout: () => {
+        // 只在已经有内容并且用户已经滚动的情况下保存位置
+        if (scrollContainer.value && scrollContainer.value.scrollHeight > 0 && scrollContainer.value.scrollTop > 0) {
+            // 保存滚动比例而不是绝对位置
+            savedScrollRatio.value = scrollContainer.value.scrollTop / scrollContainer.value.scrollHeight;
+            console.log(`[VirtualMasonryGrid] 保存滚动比例: ${savedScrollRatio.value}`);
+        }
+    },
+    onAfterRebuildLayout: () => {
+        // 在布局重建后恢复滚动位置
+        if (scrollContainer.value && savedScrollRatio.value > 0) {
+            // 使用 requestAnimationFrame 确保DOM已更新
+            requestAnimationFrame(() => {
+                if (scrollContainer.value) {
+                    // 根据保存的比例计算新的滚动位置
+                    const newScrollTop = savedScrollRatio.value * scrollContainer.value.scrollHeight;
+                    scrollContainer.value.scrollTop = newScrollTop;
+                    console.log(`[VirtualMasonryGrid] 恢复滚动位置: ${newScrollTop}`);
+                    // 重置保存的比例
+                    savedScrollRatio.value = -1;
+                }
+            });
+        }
+    }
 });
 
 // @织: --- 虚拟滚动条 ---
@@ -102,9 +130,15 @@ const { thumbRef, trackRef } = useVirtualScrollbar({
 });
 
 // --- 2. 滚动观察者 ---
+// 设置是否启用过渡动画的方法
+const setTransitionEnabled = (enabled: boolean) => {
+    transitionEnabled.value = enabled;
+};
+
 // @织: 新增 defineExpose，将内部方法暴露给父组件
 defineExpose({
     ignoreScrollEventsFor,
+    setTransitionEnabled,
 });
 
 // --- 3. 虚拟化计算器 (适配 allItems) ---
@@ -161,12 +195,16 @@ watch(() => props.scrollToIndex, (newIndex) => {
 });
 
 // @织: 将样式计算移至组件内部，确保响应性
+// 控制是否启用过渡动画
+const transitionEnabled = ref(true);
+
 const getItemStyle = (item: LayoutItem) => ({
     position: 'absolute' as const,
     top: `${item.y}px`,
     left: `${item.x}px`,
     width: `${item.width}px`,
-    transition: 'top 0.3s, left 0.3s',
+    // 在滚动过程中或手动禁用时不使用过渡动画
+    transition: isScrolling.value || !transitionEnabled.value ? 'none' : 'top 0.3s, left 0.3s',
 });
 
 // --- DOM Refs and Measurement ---
@@ -243,9 +281,30 @@ watch(layoutUpdateStamp, () => {
 // @织: props.items 的变化会由 useLayoutEngine 内部的 watch 自动处理，
 // 它会自动调用 rebuildLayout，所以顶层不再需要 watch props.items。
 
-watch([containerWidth, () => props.columnWidth, () => props.gap], () => {
+watch([containerWidth, () => props.columnWidth, () => props.gap, () => props.rowHeight], () => {
+    // 在属性变化前保存滚动位置
+    if (scrollContainer.value && scrollContainer.value.scrollHeight > 0) {
+        savedScrollRatio.value = scrollContainer.value.scrollTop / scrollContainer.value.scrollHeight;
+    }
+    
     // @织: 这个 watch 仍然需要，因为它会触发 useLayoutEngine 内部的 rebuildLayout
     rebuildLayout();
+    
+    // 在下一帧恢复滚动位置
+    if (savedScrollRatio.value > 0) {
+        nextTick(() => {
+            requestAnimationFrame(() => {
+                if (scrollContainer.value) {
+                    const newScrollTop = savedScrollRatio.value * scrollContainer.value.scrollHeight;
+                    // 使用 scrollTo 使滚动更平滑
+                    scrollContainer.value.scrollTo({
+                        top: newScrollTop,
+                        behavior: 'auto'
+                    });
+                }
+            });
+        });
+    }
 });
 
 // --- 生命周期与 DOM 观察 ---
@@ -254,6 +313,13 @@ onMounted(() => {
     const resizeObserver = new ResizeObserver(entries => {
         if (entries[0]) {
             const { width, height } = entries[0].contentRect;
+            
+            // 保存当前滚动比例
+            let scrollRatio = -1;
+            if (scrollContainer.value && scrollContainer.value.scrollHeight > 0) {
+                scrollRatio = scrollContainer.value.scrollTop / scrollContainer.value.scrollHeight;
+            }
+            
             containerWidth.value = width;
             containerHeight.value = height;
             
@@ -261,11 +327,27 @@ onMounted(() => {
             nextTick(() => {
                 // 确保布局引擎和滚动条都能感知新的尺寸
                 rebuildLayout();
-                // 等布局更新后再更新滚动条
-                setTimeout(() => {
-                    // 触发滚动事件以更新滚动条
-                    scrollContainer.value?.dispatchEvent(new Event('scroll'));
-                }, 50);
+                
+                // 恢复滚动位置
+                if (scrollRatio > 0 && scrollContainer.value) {
+                    // 确保DOM更新后再恢复滚动位置
+                    requestAnimationFrame(() => {
+                        if (scrollContainer.value) {
+                            const newScrollTop = scrollRatio * scrollContainer.value.scrollHeight;
+                            scrollContainer.value.scrollTop = newScrollTop;
+                        }
+                        
+                        // 更新完滚动位置后再触发滚动事件以更新滚动条
+                        setTimeout(() => {
+                            scrollContainer.value?.dispatchEvent(new Event('scroll'));
+                        }, 50);
+                    });
+                } else {
+                    // 如果没有滚动位置需要恢复，直接触发滚动事件
+                    setTimeout(() => {
+                        scrollContainer.value?.dispatchEvent(new Event('scroll'));
+                    }, 50);
+                }
             });
         }
     });
