@@ -8,30 +8,46 @@ export interface UseScrollObserverOptions {
 }
 
 /**
- * 观察滚动容器的状态，提供滚动位置、滚动状态，并处理无限加载回调。
- * @param options - 配置选项
+ * 检查是否需要加载更多数据
  */
-export function useScrollObserver({ scrollContainer, onLoadMore, totalHeight }: UseScrollObserverOptions) {
-    const scrollTop = ref(0);
-    const isScrolling = ref(false);
-    const isScrollIgnored = ref(false);
+function computeCheckForLoadMore(
+    scrollContainer: Ref<HTMLElement | null>,
+    scrollTop: Ref<number>,
+    totalHeight: Ref<number>,
+    onLoadMore: () => void
+) {
+    const container = scrollContainer.value;
+    if (!container) return;
+    
+    const clientHeight = container.clientHeight;
+    const scrollBottom = scrollTop.value + clientHeight;
+    
+    const loadMoreThreshold = clientHeight * 2.5;
+    if (totalHeight.value > 0 && scrollBottom >= totalHeight.value - loadMoreThreshold) {
+        onLoadMore();
+    }
+}
 
+/**
+ * 创建滚动处理函数
+ */
+function createHandleScroll(
+    scrollContainer: Ref<HTMLElement | null>,
+    scrollTop: Ref<number>,
+    isScrolling: Ref<boolean>,
+    isScrollIgnored: Ref<boolean>,
+    onLoadMore: () => void,
+    totalHeight: Ref<number>
+) {
     let scrollTimeout: ReturnType<typeof setTimeout> | null = null;
-    let ignoreTimeout: ReturnType<typeof setTimeout> | null = null;
-
-    const checkForLoadMore = () => {
-        const container = scrollContainer.value;
-        if (!container) return;
-        
-        const clientHeight = container.clientHeight;
-        const scrollBottom = scrollTop.value + clientHeight;
-        
-        const loadMoreThreshold = clientHeight * 2.5;
-        if (totalHeight.value > 0 && scrollBottom >= totalHeight.value - loadMoreThreshold) {
-            onLoadMore();
-        }
-    };
-
+    
+    const checkForLoadMore = () => computeCheckForLoadMore(
+        scrollContainer, 
+        scrollTop, 
+        totalHeight, 
+        onLoadMore
+    );
+    
     const handleScroll = throttle(() => {
         if (!scrollContainer.value || isScrollIgnored.value) return;
 
@@ -47,11 +63,16 @@ export function useScrollObserver({ scrollContainer, onLoadMore, totalHeight }: 
 
         checkForLoadMore();
     }, 50);
+    
+    return { handleScroll, scrollTimeout };
+}
 
-    /**
-     * @织: 新增方法：在指定时间内忽略滚动事件
-     * @param duration - 忽略的毫秒数
-     */
+/**
+ * 创建忽略滚动事件的函数
+ */
+function createIgnoreScrollEventsFor(isScrollIgnored: Ref<boolean>) {
+    let ignoreTimeout: ReturnType<typeof setTimeout> | null = null;
+    
     const ignoreScrollEventsFor = (duration: number) => {
         isScrollIgnored.value = true;
         if (ignoreTimeout) {
@@ -61,6 +82,36 @@ export function useScrollObserver({ scrollContainer, onLoadMore, totalHeight }: 
             isScrollIgnored.value = false;
         }, duration);
     };
+    
+    return { ignoreScrollEventsFor, ignoreTimeout };
+}
+
+/**
+ * 观察滚动容器的状态，提供滚动位置、滚动状态，并处理无限加载回调。
+ * @param options - 配置选项
+ */
+export function useScrollObserver({ scrollContainer, onLoadMore, totalHeight }: UseScrollObserverOptions) {
+    const scrollTop = ref(0);
+    const isScrolling = ref(false);
+    const isScrollIgnored = ref(false);
+
+    const { handleScroll, scrollTimeout } = createHandleScroll(
+        scrollContainer,
+        scrollTop,
+        isScrolling,
+        isScrollIgnored,
+        onLoadMore,
+        totalHeight
+    );
+
+    const { ignoreScrollEventsFor, ignoreTimeout } = createIgnoreScrollEventsFor(isScrollIgnored);
+
+    const checkForLoadMore = () => computeCheckForLoadMore(
+        scrollContainer, 
+        scrollTop, 
+        totalHeight, 
+        onLoadMore
+    );
 
     watch(totalHeight, () => {
         requestAnimationFrame(checkForLoadMore);
