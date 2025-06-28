@@ -39,6 +39,7 @@ export interface UseLayoutEngineOptions {
     rowHeight: Ref<number>;
     gap: Ref<number>;
     items: Ref<any[]>;
+    isScrolling: Ref<boolean>;
     idKey: string;
     itemHeight?: (itemData: any, columnWidth: number) => number;
     estimatedTotalCount?: Ref<number | undefined>;
@@ -91,6 +92,7 @@ export function useLayoutEngine({
     rowHeight,
     gap,
     items,
+    isScrolling,
     idKey,
     itemHeight,
     estimatedTotalCount,
@@ -518,8 +520,26 @@ export function useLayoutEngine({
             return;
         }
         pendingUpdates.set(id, height);
-        scheduleProcessing();
+
+        // @织: 智能决策 - 如果不在滚动，就立即调度更新
+        if (!isScrolling.value) {
+            scheduleProcessing();
+        }
     };
+
+    // @织: 智能调度中心 - 监听滚动状态
+    watch(isScrolling, (scrolling) => {
+        // 当滚动停止时
+        if (!scrolling) {
+            // 稍作等待，让惯性滚动结束
+            setTimeout(() => {
+                // 如果有在滚动期间积压的任务，则处理它们
+                if (pendingUpdates.size > 0) {
+                    scheduleProcessing();
+                }
+            }, 100); // 100ms 的冷却时间
+        }
+    });
 
     const logicalScrollHeight = computed(() => {
         const estimatedCount = estimatedTotalCount?.value;

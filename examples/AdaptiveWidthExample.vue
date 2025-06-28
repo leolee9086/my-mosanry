@@ -1,6 +1,5 @@
 <template>
   <div class="adaptive-width-example-container">
-    <h1>两端对齐 (Justified) 模式测试</h1>
     <div class="controls">
       <label>
         行高 (Row Height): {{ rowHeight }}px

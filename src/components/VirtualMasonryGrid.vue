@@ -62,13 +62,20 @@ const emit = defineEmits<{
 const scrollContainer = ref<HTMLElement | null>(null);
 const containerWidth = ref(0);
 const containerHeight = ref(0);
+const totalHeight = ref(0); // @织: 提前定义
+
+// --- 2. 滚动观察者 (提前) ---
+const { scrollTop, isScrolling, ignoreScrollEventsFor } = useScrollObserver({
+    scrollContainer,
+    totalHeight: totalHeight, 
+    onLoadMore: () => emit('load-more'),
+});
 
 // --- 1. 布局引擎 (已重构为双缓存) ---
 const {
     allItems,
     logicalScrollHeight,
     contentHeight,
-    totalHeight,         // @织: 获取已加载内容真实高度
     updateItemHeight,
     rebuildLayout,
     layoutUpdateStamp,
@@ -80,10 +87,12 @@ const {
     rowHeight: toRef(props, 'rowHeight'),
     gap: toRef(props, 'gap'),
     items: toRef(props, 'items'),
+    isScrolling,
     idKey: props.idKey,
     itemHeight: props.itemHeight,
     estimatedTotalCount: toRef(props, 'estimatedTotalCount'),
-    mode: props.mode
+    mode: props.mode,
+    totalHeight: totalHeight, 
 });
 
 // @织: --- 虚拟滚动条 ---
@@ -92,18 +101,11 @@ const { thumbRef, trackRef } = useVirtualScrollbar({
     totalHeight: totalHeight,
 });
 
-
 // --- 2. 滚动观察者 ---
-const { scrollTop, isScrolling, ignoreScrollEventsFor } = useScrollObserver({
-    scrollContainer,
-    totalHeight: totalHeight, // @织: 使用已加载内容的真实高度来判断是否需要加载更多
-    onLoadMore: () => emit('load-more'),
-});
 // @织: 新增 defineExpose，将内部方法暴露给父组件
 defineExpose({
     ignoreScrollEventsFor,
 });
-
 
 // --- 3. 虚拟化计算器 (适配 allItems) ---
 const { visibleItems, forceUpdate: forceVirtualizationUpdate } = useVirtualization({

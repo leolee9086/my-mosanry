@@ -1,6 +1,5 @@
 <template>
   <div class="test-container">
-    <h1>DataProvider Test</h1>
     <p>This example demonstrates the <code>VirtualMasonryDataProvider</code>, which handles virtualized data fetching.</p>
     <p>Total items: {{ totalItems.toLocaleString() }}</p>
     <div class="grid-container">
@@ -34,26 +33,24 @@ import type { DataFetcher } from '../src/composables/useVirtualDataSource';
 import { computed, ref } from 'vue';
 import PQueue from 'p-queue';
 
-const totalItems = 1_000_000;
+// 减小数据量，在性能优化后可以逐步增加
+const totalItems = 100_000;
 
 const COLORS = ['#f5a3a3', '#a3f5e9', '#a3a9f5', '#f5e4a3', '#f5a3d5'];
 
-// @织: 创建一个全局的、并发数为1的任务队列
-const queue = new PQueue({ concurrency: 10 });
+// 增加并发数，减少队列堵塞
+const queue = new PQueue({ concurrency: 20 });
 
-// @织: AbortController 用于取消不再需要的旧请求
-let abortController = new AbortController();
+// 简化请求取消机制
+let currentRequestId = 0;
 
 // A cache to store fetched data
 const dataCache = new Map<number, any>();
 
 const fetchData: DataFetcher = async (indices: number[]) => {
-  // @织: 1. 发出取消命令，终止上一次的所有排队中任务
-  abortController.abort();
-  // @织: 2. 为本次新请求创建一个全新的控制器和信号
-  abortController = new AbortController();
-  const { signal } = abortController;
-
+  // 使用请求ID而不是AbortController
+  const requestId = ++currentRequestId;
+  
   console.log(`%cFetching data for indices: [${indices.join(', ')}]`, 'color: dodgerblue');
   
   const indicesToFetch = indices.filter(index => !dataCache.has(index));
@@ -63,54 +60,43 @@ const fetchData: DataFetcher = async (indices: number[]) => {
     return indices.map(index => dataCache.get(index));
   }
   
-  const fetchPromises = indicesToFetch.map(i => {
-    // @织: 3. 将信号传递给队列任务，让 p-queue 能够响应取消命令
-    return queue.add(() => {
-      return new Promise<void>((resolveTask, rejectTask) => {
-        // 提前检查，如果任务在开始前就已被取消，则直接拒绝
-        if (signal.aborted) {
-          return rejectTask(new DOMException('Aborted', 'AbortError'));
-        }
-        
-        setTimeout(() => {
-          const item = {
-            id: i,
-            index: i,
-            title: `Image #${i + 1}`,
-            color: COLORS[i % COLORS.length],
-            aspectRatio: 0.7 + Math.random() * 0.6,
-            imageUrl: `https://picsum.photos/seed/${i}/400/${Math.round(400 * (0.7 + Math.random() * 0.6))}`
-          };
-          dataCache.set(i, item);
-
-          const img = new Image();
-          img.onload = () => resolveTask();
-          img.onerror = () => {
-            console.error(`Image #${i} failed to load from ${item.imageUrl}`);
-            resolveTask();
-          };
-          img.src = item.imageUrl;
-        }, 50 + Math.random() * 200);
-      });
-    }, { signal });
-  });
-
   try {
-    // @织: 4. 等待任务完成，如果被取消，Promise.all会抛出异常
-    await Promise.all(fetchPromises);
-  } catch (error) {
-    // @织: 捕获预期的取消错误，并静默处理
-    if ((error as DOMException)?.name === 'AbortError') {
-      console.log('%cPrevious fetch was cancelled.', 'color: red');
-      return []; // 返回空数组，因为本次请求已被中断
+    // 使用Promise.all和map直接处理所有请求，不再等待每个独立的Promise
+    await Promise.all(indicesToFetch.map(i => 
+      queue.add(() => {
+        // 如果当前请求ID不再是最新的，则放弃这个任务
+        if (requestId !== currentRequestId) return Promise.resolve();
+        
+        return new Promise<void>(resolve => {
+          setTimeout(() => {
+            // 生成数据但不再等待图片加载
+            const aspectRatio = 0.7 + Math.random() * 0.6;
+            const item = {
+              id: i,
+              index: i,
+              title: `Image #${i + 1}`,
+              color: COLORS[i % COLORS.length],
+              aspectRatio: aspectRatio,
+              imageUrl: `https://picsum.photos/seed/${i}/400/${Math.round(400 * aspectRatio)}`
+            };
+            dataCache.set(i, item);
+            resolve();
+          }, 20 + Math.random() * 50); // 减少延迟时间
+        });
+      })
+    ));
+    
+    // 如果请求已过期，返回空数组
+    if (requestId !== currentRequestId) {
+      return [];
     }
-    // 对于其他未知错误，继续向上抛出
-    throw error;
+  } catch (error) {
+    console.error('Error fetching data:', error);
+    return [];
   }
 
-  // Reconstruct the full results array from cache in the correct order
+  // 从缓存重构结果数组
   const finalResults = indices.map(index => dataCache.get(index));
-
   console.log(`%c--> Fetched ${indicesToFetch.length} new items. Total returned: ${finalResults.length}`, 'color: green');
   return finalResults;
 };

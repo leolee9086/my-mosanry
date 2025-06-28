@@ -9,6 +9,9 @@
     <main class="app-content">
       <router-view />
     </main>
+    <footer class="app-footer">
+      图片来自 <a href="https://picsum.photos/" target="_blank">Picsum Photos</a>
+    </footer>
   </div>
 </template>
 

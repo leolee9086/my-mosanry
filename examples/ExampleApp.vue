@@ -1,6 +1,5 @@
 <template>
     <div class="example-app">
-        <h1>Virtual Masonry Grid - 示例</h1>
         <div class="controls">
             <button @click="addItems">添加 50 个项目</button>
             <button @click="clearItems">清空</button>
