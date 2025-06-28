@@ -13,7 +13,7 @@ export function useVirtualScrollbar({ scrollContainer, totalHeight }: UseVirtual
   let animationFrameId: number | null = null;
 
   const updateThumb = () => {
-    if (!scrollContainer.value || !thumbRef.value) return;
+    if (!scrollContainer.value || !thumbRef.value || !trackRef.value) return;
 
     const {
       scrollTop,
@@ -21,16 +21,27 @@ export function useVirtualScrollbar({ scrollContainer, totalHeight }: UseVirtual
       clientHeight,
     } = scrollContainer.value;
 
+    // 如果内容不需要滚动，则隐藏滚动条但不要return
     if (scrollHeight <= clientHeight) {
       thumbRef.value.style.display = 'none';
+      trackRef.value.style.display = 'none';
       return;
+    } else {
+      thumbRef.value.style.display = 'block';
+      trackRef.value.style.display = 'block';
     }
 
-    thumbRef.value.style.display = 'block';
-
-    const rawThumbHeight = (clientHeight / totalHeight.value) * clientHeight;
-    const thumbHeight = Math.max(rawThumbHeight, MIN_THUMB_HEIGHT);
-    const thumbTop = (scrollTop / scrollHeight) * clientHeight;
+    // 计算滚动条高度，使用滚动容器物理高度而不是逻辑高度
+    // 这样无论totalHeight多大，滚动条高度都基于实际可滚动内容
+    const scrollRatio = clientHeight / scrollHeight;
+    const thumbHeight = Math.max(scrollRatio * clientHeight, MIN_THUMB_HEIGHT);
+    
+    // 计算滚动条位置，使用物理滚动位置和物理内容高度
+    const maxScrollDistance = scrollHeight - clientHeight;
+    const scrollProgress = maxScrollDistance > 0 ? scrollTop / maxScrollDistance : 0;
+    const trackHeight = clientHeight;
+    const maxThumbTravel = trackHeight - thumbHeight;
+    const thumbTop = scrollProgress * maxThumbTravel;
 
     thumbRef.value.style.height = `${thumbHeight}px`;
     thumbRef.value.style.transform = `translateY(${thumbTop}px)`;
@@ -44,9 +55,11 @@ export function useVirtualScrollbar({ scrollContainer, totalHeight }: UseVirtual
   };
   
   onMounted(() => {
+    // 在组件挂载后立即更新滚动条状态
     if (scrollContainer.value) {
       scrollContainer.value.addEventListener('scroll', handleScroll, { passive: true });
-      updateThumb(); // Initial update
+      // 确保初始化时调用一次updateThumb
+      requestAnimationFrame(updateThumb);
     }
     if (trackRef.value) {
         trackRef.value.addEventListener('mousedown', handleTrackMouseDown);
@@ -96,7 +109,10 @@ export function useVirtualScrollbar({ scrollContainer, totalHeight }: UseVirtual
         const trackRect = (currentTarget as HTMLElement).getBoundingClientRect();
         const clickRatio = (clientY - trackRect.top) / trackRect.height;
         
-        scrollContainer.value.scrollTop = clickRatio * totalHeight.value;
+        // 使用scrollHeight而不是totalHeight来计算滚动位置
+        const scrollHeight = scrollContainer.value.scrollHeight;
+        const clientHeight = scrollContainer.value.clientHeight;
+        scrollContainer.value.scrollTop = clickRatio * (scrollHeight - clientHeight);
     }
   };
 
@@ -107,11 +123,22 @@ export function useVirtualScrollbar({ scrollContainer, totalHeight }: UseVirtual
     e.stopPropagation();
 
     const deltaY = e.clientY - startY;
-    const clientHeight = scrollContainer.value.clientHeight;
+    const trackHeight = scrollContainer.value.clientHeight;
     
-    const scrollDelta = (deltaY / clientHeight) * totalHeight.value;
-
-    scrollContainer.value.scrollTop = startScrollTop + scrollDelta;
+    // 使用实际的scrollHeight来计算移动距离
+    const scrollHeight = scrollContainer.value.scrollHeight;
+    const clientHeight = scrollContainer.value.clientHeight;
+    const maxScrollTop = scrollHeight - clientHeight;
+    
+    // 计算滑块移动比例
+    const thumbHeight = Math.max((clientHeight / scrollHeight) * clientHeight, MIN_THUMB_HEIGHT);
+    const trackAvailable = clientHeight - thumbHeight;
+    const scrollRatio = maxScrollTop / trackAvailable;
+    
+    // 计算实际滚动位置
+    const newScrollTop = startScrollTop + deltaY * scrollRatio;
+    
+    scrollContainer.value.scrollTop = Math.max(0, Math.min(newScrollTop, maxScrollTop));
   };
 
   const handleThumbMouseUp = (e: MouseEvent) => {

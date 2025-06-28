@@ -146,16 +146,26 @@ export function useLayoutEngine({
             return;
         }
 
+        let calculatedHeight = 0;
+
         if (mode === 'grid' || mode === 'justified') {
             const lastItem = allItems.value[allItems.value.length - 1];
             if (lastItem) {
-                totalHeight.value = lastItem.y + lastItem.height;
-            } else {
-                totalHeight.value = 0;
+                calculatedHeight = lastItem.y + lastItem.height;
             }
         } else { // masonry
-            totalHeight.value = Math.max(...columns.map(c => c.height));
+            calculatedHeight = Math.max(...columns.map(c => c.height));
         }
+        
+        // 如果有估算的总项目数，根据已知项目的平均高度估算总高度
+        if (estimatedTotalCount?.value && estimatedTotalCount.value > allItems.value.length && allItems.value.length > 0) {
+            const avgHeight = calculatedHeight / allItems.value.length;
+            const estimatedHeight = avgHeight * estimatedTotalCount.value;
+            calculatedHeight = Math.max(calculatedHeight, estimatedHeight);
+        }
+        
+        // 限制最大高度，防止浏览器渲染问题
+        totalHeight.value = Math.min(calculatedHeight, MAX_BROWSER_HEIGHT);
     };
 
     const appendItemsToMasonry = (itemsToAppend: any[]) => {

@@ -256,9 +256,30 @@ onMounted(() => {
             const { width, height } = entries[0].contentRect;
             containerWidth.value = width;
             containerHeight.value = height;
+            
+            // 在容器尺寸变化后更新滚动条
+            nextTick(() => {
+                // 确保布局引擎和滚动条都能感知新的尺寸
+                rebuildLayout();
+                // 等布局更新后再更新滚动条
+                setTimeout(() => {
+                    // 触发滚动事件以更新滚动条
+                    scrollContainer.value?.dispatchEvent(new Event('scroll'));
+                }, 50);
+            });
         }
     });
+    
     resizeObserver.observe(scrollContainer.value);
+    
+    // 确保初始布局和滚动条正确
+    nextTick(() => {
+        rebuildLayout();
+        // 初始化时强制一次滚动事件
+        setTimeout(() => {
+            scrollContainer.value?.dispatchEvent(new Event('scroll'));
+        }, 50);
+    });
 
     onUnmounted(() => {
         resizeObserver.disconnect();
@@ -275,6 +296,7 @@ onMounted(() => {
     height: 100%;
     overflow: hidden;
     /* 确保所有内容都在 wrapper 内部 */
+    isolation: isolate; /* 创建新的层叠上下文，帮助处理z-index问题 */
 }
 
 .virtual-masonry-grid-container {
@@ -319,18 +341,20 @@ onMounted(() => {
     top: 0;
     width: 8px;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.1);
+    background-color: rgba(0, 0, 0, 0.05);
     border-radius: 4px;
-    opacity: 0;
+    opacity: 0.2; /* 默认轻微显示，确保用户知道有滚动功能 */
     transition: opacity 0.3s ease;
     z-index: 10;
+    /* 确保滚动条在所有内容之上 */
+    pointer-events: auto; /* 确保即使在容器禁用指针事件时仍可点击滚动条 */
 }
 
 .scrollbar-track:hover {
     opacity: 1;
 }
 
-.virtual-masonry-grid-container:hover .scrollbar-track {
+.virtual-masonry-grid-container:hover ~ .scrollbar-track {
     opacity: 1;
 }
 
@@ -354,8 +378,8 @@ onMounted(() => {
     position: absolute;
     top: -10px;
     bottom: -10px;
-    left: 0;
-    right: 0;
+    left: -5px;
+    right: -5px; /* 扩展点击区域，增加用户友好性 */
 }
 
 .scrollbar-thumb:hover {
