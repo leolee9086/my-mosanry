@@ -27,9 +27,9 @@
 </template>
 
 <script setup lang="ts">
-import VirtualMasonryDataProvider from '../src/components/VirtualMasonryDataProvider.vue';
-import ImageCard from './cards/ImageCard.vue';
-import type { DataFetcher } from '../src/composables/useVirtualDataSource';
+import VirtualMasonryDataProvider from '../../src/components/VirtualMasonryDataProvider.vue';
+import ImageCard from '../cards/ImageCard.vue';
+import type { DataFetcher } from '../../src/composables/useVirtualDataSource';
 import { computed, ref } from 'vue';
 import PQueue from 'p-queue';
 

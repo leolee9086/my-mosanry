@@ -53,9 +53,9 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import SelectionWrapper from '../src/components/SelectionWrapper.vue';
-import VirtualMasonryGrid from '../src/components/VirtualMasonryGrid.vue';
-import type { SelectionEvent } from '../src/composables/useSelectionSystem';
+import SelectionWrapper from '../../src/components/SelectionWrapper.vue';
+import VirtualMasonryGrid from '../../src/components/VirtualMasonryGrid.vue';
+import type { SelectionEvent } from '../../src/composables/useSelectionSystem';
 
 let itemIdCounter = 0;
 const items = ref<Array<{

@@ -32,15 +32,23 @@
 
 <script setup lang="ts">
 import { ref, markRaw, shallowRef } from 'vue';
-import VirtualMasonryGrid from '../src/components/VirtualMasonryGrid.vue';
-import ImageCard from './cards/ImageCard.vue';
-import TextBlockCard from './cards/TextBlockCard.vue';
+import VirtualMasonryGrid from '../../src/components/VirtualMasonryGrid.vue';
+import ImageCard from '../cards/ImageCard.vue';
+import TextBlockCard from '../cards/TextBlockCard.vue';
 
 const TOTAL_ITEMS = 1_000_000;
 const BATCH_SIZE = 100;
 let itemIdCounter = 0;
 
-const items = shallowRef<any[]>([]);
+const items = shallowRef<Array<{
+  id: string;
+  cardType: any;
+  title: string;
+  color: string;
+  imageUrl?: string;
+  aspectRatio?: number;
+  content?: string;
+}>>([]);
 const isLoading = ref(false);
 const estimatedCount = ref(TOTAL_ITEMS);
 
@@ -61,7 +69,15 @@ const handleScrollSettled = (visibleIndices: number[]) => {
 const generateItems = (count: number) => {
     if (items.value.length >= TOTAL_ITEMS) return [];
 
-    const newItems = [];
+    const newItems: Array<{
+      id: string;
+      cardType: any;
+      title: string;
+      color: string;
+      imageUrl?: string;
+      aspectRatio?: number;
+      content?: string;
+    }> = [];
     const limit = Math.min(count, TOTAL_ITEMS - items.value.length);
 
     for (let i = 0; i < limit; i++) {
@@ -69,7 +85,15 @@ const generateItems = (count: number) => {
         const cardIndex = Math.floor(Math.random() * cardComponents.length);
         const cardType = cardComponents[cardIndex];
 
-        let itemData: any = {
+        let itemData: {
+          id: string;
+          cardType: any;
+          title: string;
+          color: string;
+          imageUrl?: string;
+          aspectRatio?: number;
+          content?: string;
+        } = {
             id: id,
             cardType: markRaw(cardType),
             title: `卡片 #${itemIdCounter}`,

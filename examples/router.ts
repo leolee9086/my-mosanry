@@ -1,21 +1,52 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import ExampleApp from './ExampleApp.vue';
-import StressTestExample from './StressTestExample.vue';
-import DataProviderExample from './DataProviderExample.vue';
-import AdaptiveWidthExample from './AdaptiveWidthExample.vue';
-import SelectionExample from './SelectionExample.vue';
-import SimpleSelectionTest from './SimpleSelectionTest.vue';
-import SelectionBoxExample from './SelectionBoxExample.vue';
 
 const routes = [
-    { path: '/simple', component: ExampleApp, name: 'Simple' },
-    { path: '/stress-test', component: StressTestExample, name: 'Stress Test (1M items)' },
-    { path: '/provider-test', component: DataProviderExample, name: 'DataProvider Test' },
-    { path: '/adaptive-width', component: AdaptiveWidthExample, name: 'Adaptive Width Test' },
-    { path: '/selection', component: SelectionExample, name: 'Selection Test' },
-    { path: '/simple-selection', component: SimpleSelectionTest, name: 'Simple Selection Test' },
-    { path: '/selection-box', component: SelectionBoxExample, name: 'Selection Box Example' },
-    { path: '/', redirect: '/simple' },
+    // 选择功能示例
+    { 
+        path: '/selection/basic', 
+        component: () => import('./selection/basic-selection.vue'), 
+        name: '基础选择' 
+    },
+    { 
+        path: '/selection/drag', 
+        component: () => import('./selection/drag-selection.vue'), 
+        name: '拖拽选择' 
+    },
+    { 
+        path: '/selection/test', 
+        component: () => import('./selection/selection-test.vue'), 
+        name: '选择测试' 
+    },
+    
+    // 布局功能示例
+    { 
+        path: '/layout/adaptive', 
+        component: () => import('./layout/adaptive-width.vue'), 
+        name: '自适应宽度' 
+    },
+    { 
+        path: '/layout/data-provider', 
+        component: () => import('./layout/data-provider.vue'), 
+        name: '数据提供者' 
+    },
+    { 
+        path: '/layout/stress-test', 
+        component: () => import('./layout/stress-test.vue'), 
+        name: '压力测试' 
+    },
+    
+    // 展示功能示例
+    { 
+        path: '/showcase/large-list', 
+        component: () => import('./showcase/large-list/large-list-example.vue'), 
+        name: '大列表示例' 
+    },
+    
+    // 默认重定向
+    { path: '/', redirect: '/selection/basic' },
+    { path: '/selection', redirect: '/selection/basic' },
+    { path: '/layout', redirect: '/layout/adaptive' },
+    { path: '/showcase', redirect: '/showcase/large-list' },
 ];
 
 export const router = createRouter({

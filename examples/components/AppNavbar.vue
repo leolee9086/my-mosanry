@@ -6,51 +6,51 @@
         <span class="brand-text">Masonry Demo</span>
       </div>
       <div class="nav-links">
-        <!-- 基础功能组 -->
-        <div class="nav-group">
-          <span class="group-label">基础</span>
-          <div class="group-links">
-            <router-link to="/simple" class="nav-link" title="简单示例">
-              <span class="link-icon">📱</span>
-              <span class="link-text">Simple</span>
-            </router-link>
-            <router-link to="/adaptive-width" class="nav-link" title="自适应宽度">
-              <span class="link-icon">📐</span>
-              <span class="link-text">Adaptive</span>
-            </router-link>
-          </div>
-        </div>
-
-        <!-- 性能测试组 -->
-        <div class="nav-group">
-          <span class="group-label">性能</span>
-          <div class="group-links">
-            <router-link to="/stress-test" class="nav-link" title="压力测试">
-              <span class="link-icon">⚡</span>
-              <span class="link-text">Stress</span>
-            </router-link>
-            <router-link to="/provider-test" class="nav-link" title="数据提供者测试">
-              <span class="link-icon">🔄</span>
-              <span class="link-text">Provider</span>
-            </router-link>
-          </div>
-        </div>
-
         <!-- 选择功能组 -->
         <div class="nav-group">
           <span class="group-label">选择</span>
           <div class="group-links">
-            <router-link to="/selection" class="nav-link" title="选择功能">
+            <router-link to="/selection/basic" class="nav-link" title="基础选择">
               <span class="link-icon">✅</span>
-              <span class="link-text">Selection</span>
+              <span class="link-text">基础</span>
             </router-link>
-            <router-link to="/simple-selection" class="nav-link" title="简单选择">
-              <span class="link-icon">🎯</span>
-              <span class="link-text">Simple</span>
-            </router-link>
-            <router-link to="/selection-box" class="nav-link" title="选择框">
+            <router-link to="/selection/drag" class="nav-link" title="拖拽选择">
               <span class="link-icon">📦</span>
-              <span class="link-text">Box</span>
+              <span class="link-text">拖拽</span>
+            </router-link>
+            <router-link to="/selection/test" class="nav-link" title="选择测试">
+              <span class="link-icon">🎯</span>
+              <span class="link-text">测试</span>
+            </router-link>
+          </div>
+        </div>
+
+        <!-- 布局功能组 -->
+        <div class="nav-group">
+          <span class="group-label">布局</span>
+          <div class="group-links">
+            <router-link to="/layout/adaptive" class="nav-link" title="自适应宽度">
+              <span class="link-icon">📐</span>
+              <span class="link-text">自适应</span>
+            </router-link>
+            <router-link to="/layout/data-provider" class="nav-link" title="数据提供者">
+              <span class="link-icon">🔄</span>
+              <span class="link-text">数据</span>
+            </router-link>
+            <router-link to="/layout/stress-test" class="nav-link" title="压力测试">
+              <span class="link-icon">⚡</span>
+              <span class="link-text">压力</span>
+            </router-link>
+          </div>
+        </div>
+
+        <!-- 展示功能组 -->
+        <div class="nav-group">
+          <span class="group-label">展示</span>
+          <div class="group-links">
+            <router-link to="/showcase/large-list" class="nav-link" title="大列表示例">
+              <span class="link-icon">📋</span>
+              <span class="link-text">大列表</span>
             </router-link>
           </div>
         </div>

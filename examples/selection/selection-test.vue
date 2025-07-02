@@ -90,8 +90,8 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import SelectionWrapper from '../src/components/SelectionWrapper.vue';
-import type { SelectionEvent } from '../src/composables/useSelectionSystem';
+import SelectionWrapper from '../../src/components/SelectionWrapper.vue';
+import type { SelectionEvent } from '../../src/composables/useSelectionSystem';
 
 const selectionWrapperRef = ref<InstanceType<typeof SelectionWrapper> | null>(null);
 const selectedIds = ref<Set<string>>(new Set());

@@ -139,7 +139,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue';
-import SelectionWrapper from '../src/components/SelectionWrapper.vue';
+import SelectionWrapper from '../../src/components/SelectionWrapper.vue';
 
 // 响应式状态
 const selectionBoxRef = ref<InstanceType<typeof SelectionWrapper> | null>(null);
