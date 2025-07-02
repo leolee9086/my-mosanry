@@ -38,9 +38,9 @@ export interface UseLayoutEngineOptions {
     items: Ref<any[]>;
     isScrolling: Ref<boolean>;
     idKey: string;
-    itemHeight?: (itemData: any, columnWidth: number) => number;
+    itemHeight?: (itemData: any, columnWidth?: number) => number;
     estimatedTotalCount?: Ref<number | undefined>;
-    mode?: 'masonry' | 'grid' | 'justified';
+    mode?: 'masonry' | 'grid' | 'justified' | 'list';
     // 布局重建前的回调
     onBeforeRebuildLayout?: () => void;
     // 布局重建后的回调

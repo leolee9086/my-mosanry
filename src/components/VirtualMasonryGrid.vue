@@ -36,12 +36,12 @@ interface Props {
     rowHeight?: number;
     gap?: number;
     idKey?: string;
-    itemHeight?: (item: any, columnWidth: number) => number;
+    itemHeight?: (item: any, columnWidth?: number) => number;
     overscanBy?: number;
     estimatedTotalCount?: number;
     scrollToIndex?: number;
     scrollToOptions?: ScrollIntoViewOptions;
-    mode?: 'masonry' | 'grid' | 'justified';
+    mode?: 'masonry' | 'grid' | 'justified' | 'list';
 }
 
 const props = withDefaults(defineProps<Props>(), {

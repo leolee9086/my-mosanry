@@ -3,6 +3,7 @@ import type { UseLayoutEngineOptions, LayoutEngineResult } from './layout-engine
 import { useMasonryLayout } from './layout-engines/masonry/useMasonryLayout';
 import { useGridLayout } from './layout-engines/grid/useGridLayout';
 import { useJustifiedLayout } from './layout-engines/justified/useJustifiedLayout';
+import { useListLayout } from './layout-engines/list/useListLayout';
 
 /**
  * 布局引擎工厂 - 根据模式选择合适的布局实现
@@ -22,6 +23,8 @@ export function useLayoutEngine(options: UseLayoutEngineOptions): LayoutEngineRe
         return useGridLayout(options);
     } else if (mode === 'justified') {
         return useJustifiedLayout(options);
+    } else if (mode === 'list') {
+        return useListLayout(options);
     } else {
         // 默认使用瀑布流布局
         return useMasonryLayout(options);

@@ -32,8 +32,11 @@ import * as GridLayout from './grid';
 // 对齐布局
 import * as JustifiedLayout from './justified';
 
+// 列表布局
+import * as ListLayout from './list';
+
 // 布局模式类型
-type LayoutMode = 'masonry' | 'grid' | 'justified';
+type LayoutMode = 'masonry' | 'grid' | 'justified' | 'list';
 
 export {
     // 布局引擎工厂
@@ -60,5 +63,6 @@ export {
     // 布局引擎
     MasonryLayout,
     GridLayout,
-    JustifiedLayout
+    JustifiedLayout,
+    ListLayout
 }; 

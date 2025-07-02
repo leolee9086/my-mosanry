@@ -32,8 +32,9 @@
           <VirtualMasonryGrid
             class="large-list"
             :items="listItems"
-            :column-width="400"
-            :gap="0"
+            mode="list"
+            :item-height="(item) => 80"
+            :gap="8"
             :estimated-total-count="totalItems"
             id-key="id"
             @load-more="loadMoreItems"
