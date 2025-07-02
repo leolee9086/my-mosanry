@@ -24,11 +24,11 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, defineProps, defineEmits, watch, toRef, withDefaults, nextTick, defineExpose } from 'vue';
-import { useLayoutEngine, LayoutItem } from '../composables/useLayoutEngine';
+import { useLayoutEngine } from '../composables/useLayoutEngine';
 import { useVirtualization } from '../composables/useVirtualization';
 import { useScrollObserver } from '../composables/useScrollObserver';
 import { useVirtualScrollbar } from '../composables/useVirtualScrollbar';
-
+import type { LayoutItem } from '../composables/layout-engines/types';
 // 为 props 定义类型
 interface Props {
     items: any[];
@@ -82,8 +82,6 @@ const {
     updateItemHeight,
     rebuildLayout,
     layoutUpdateStamp,
-    estimatedTotalCount: estimatedTotalCountRef,
-    mode,
 } = useLayoutEngine({
     containerWidth,
     columnWidth: toRef(props, 'columnWidth'),
@@ -95,7 +93,6 @@ const {
     itemHeight: props.itemHeight,
     estimatedTotalCount: toRef(props, 'estimatedTotalCount'),
     mode: props.mode,
-    totalHeight: totalHeight,
     // 传入保存/恢复滚动位置的回调函数
     onBeforeRebuildLayout: () => {
         // 只在已经有内容并且用户已经滚动的情况下保存位置

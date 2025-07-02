@@ -1,14 +1,88 @@
 # 这个区段由开发者编写,未经允许禁止AI修改
+开发者将会在这里提出要求,AI需要判断并满足这些要求,除非开发者明确授权,ai不能修改这个区块的内容
 
-# 修改记录
+## 开发者要求
+- 选择器组件需要保持简洁的DOM结构
+- 选择框渲染应该独立于容器组件
+- 空间选择器应该按需启用
+- 保持向后兼容性
 
-## 2025-06-27
+## 修改记录
 
-### `VirtualMasonryGrid.vue`
+### 2025-06-29 10:30 - 选择框定位修复
+**问题**: 鼠标移动时选择框不显示，定位上下文和坐标系统不匹配
 
-- **修复**: 修复了模板中对占位符数据的判断逻辑。
-- **原因**: `v-if` 指令错误地检查了布局项 `item` 的 `isPlaceholder` 属性，而该属性实际存在于嵌套的 `item.data` 对象中。此错误导致占位符被当作真实数据传入默认插槽，从而在UI上显示为原始对象字符串。
-- **变更**: 将 `<template v-if="item.isPlaceholder">` 修改为 `<template v-if="item.data && item.data.isPlaceholder">`，确保对占位符进行正确判断。 
+**原因分析**:
+1. 选择框使用 `position: absolute` 但被放在 `content-area` 内部，受 `overflow: hidden` 影响
+2. 坐标计算使用相对坐标，但选择框定位上下文不匹配
+3. 空间选择器使用相对坐标，与选择框的坐标系统不一致
+
+**解决方案**:
+1. 修改 `SelectionBox.vue` 使用 `position: fixed` 和屏幕空间定位
+2. 修改 `useSelectionBox.ts` 中的坐标计算，直接使用 `clientX/clientY` 屏幕坐标
+3. 修改 `selectionBoxProvider.vue` 添加专门的选择框插槽
+4. 修改 `SelectionBoxExample.vue` 使用新的选择框插槽结构
+5. 修改空间选择器坐标计算，使其也使用屏幕坐标
+
+**主要变更**:
+- `src/components/SelectionBox.vue` - 改为 `position: fixed`
+- `src/composables/useSelectionBox.ts` - 坐标计算改为屏幕坐标
+- `src/components/selectionBoxProvider.vue` - 添加 `selection-box` 插槽
+- `examples/SelectionBoxExample.vue` - 使用新的插槽结构
+
+**效果**:
+- 选择框现在正确显示，不受父容器影响
+- 坐标系统统一，空间选择器正常工作
+- 选择框始终相对于视口定位，更稳定可靠
+
+### 2025-06-29 11:00 - 选择框样式修复
+**问题**: 选择框在视觉上不可见，缺少可见的边框样式
+
+**原因分析**:
+1. 在自定义模式下，选择框组件没有提供基本的边框样式
+2. 自定义内容覆盖了默认边框，但没有提供替代的视觉样式
+3. 示例中的自定义样式定位不正确，导致选择框不可见
+
+**解决方案**:
+1. 修改 `SelectionBox.vue` 模板，确保边框始终显示
+2. 调整CSS样式，让自定义内容作为覆盖层显示在边框上方
+3. 修改示例中的自定义样式，使其正确显示在选择框内部
+
+**主要变更**:
+- `src/components/SelectionBox.vue` - 修改模板结构和CSS样式
+- `examples/SelectionBoxExample.vue` - 修复自定义选择框样式
+
+**效果**:
+- 选择框现在有可见的蓝色边框和半透明背景
+- 自定义内容能正确显示在选择框上方
+- 选择框在拖拽时清晰可见
+
+### 2025-06-28 22:15 - 选择框组件重构
+**问题**: selectionBoxProvider.vue DOM结构过厚，对使用场景侵入性太大
+
+**解决方案**:
+1. 创建了 `useSelectionBox.ts` composable 来管理选择框状态和鼠标事件
+2. 创建了独立的 `SelectionBox.vue` 组件来处理选择框渲染
+3. 重构了 `selectionBoxProvider.vue`，移除了选择框渲染逻辑，简化了DOM结构
+4. 空间选择器改为按需启用，默认关闭以提高性能
+
+**主要变更**:
+- `src/composables/useSelectionBox.ts` - 新增选择框状态管理
+- `src/components/SelectionBox.vue` - 新增独立选择框组件
+- `src/components/selectionBoxProvider.vue` - 重构，简化DOM结构
+- `examples/SelectionBoxExample.vue` - 更新示例，使用新的API
+
+**API变更**:
+- 移除了复杂的插槽结构，只保留主要内容插槽
+- 选择框渲染委托给独立的 `SelectionBox` 组件
+- 空间选择器通过 `enableSpatialSelection` 属性控制
+- 保持了向后兼容性
+
+**效果**:
+- DOM结构从多层嵌套简化为单层容器
+- 选择框渲染完全可定制
+- 性能提升（空间选择器按需启用）
+- 使用方式更加灵活
 
 ## Virtual Masonry 组件优化记录
 

@@ -25,6 +25,7 @@
     "@types/rbush": "^4.0.0",
     "p-queue": "^8.1.0",
     "rbush": "^4.0.1",
+    "typescript": "^5.8.3",
     "vue": "^3.5.17",
     "vue-router": "^4.5.1"
   },

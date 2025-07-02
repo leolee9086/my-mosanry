@@ -1,23 +1,6 @@
 import { createApp } from 'vue';
-import { createRouter, createWebHistory } from 'vue-router';
-import ExampleApp from './ExampleApp.vue';
-import StressTestExample from './StressTestExample.vue';
-import DataProviderExample from './DataProviderExample.vue';
-import AdaptiveWidthExample from './AdaptiveWidthExample.vue';
 import App from './App.vue';
-
-const routes = [
-    { path: '/simple', component: ExampleApp, name: 'Simple' },
-    { path: '/stress-test', component: StressTestExample, name: 'Stress Test (1M items)' },
-    { path: '/provider-test', component: DataProviderExample, name: 'DataProvider Test' },
-    { path: '/adaptive-width', component: AdaptiveWidthExample, name: 'Adaptive Width Test' },
-    { path: '/', redirect: '/adaptive-width' },
-];
-
-const router = createRouter({
-    history: createWebHistory(),
-    routes,
-});
+import { router } from './router';
 
 const app = createApp(App);
 app.use(router);
