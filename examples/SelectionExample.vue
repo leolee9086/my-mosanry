@@ -9,8 +9,8 @@
       </div>
     </div>
 
-    <SelectionProvider 
-      ref="selectionProviderRef"
+    <SelectionWrapper 
+      ref="selectionWrapperRef"
       :mode="'multiple'" 
       :allow-empty="true"
       @selection-change="handleSelectionChange"
@@ -47,25 +47,35 @@
           </template>
         </VirtualMasonryGrid>
       </template>
-    </SelectionProvider>
+    </SelectionWrapper>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, inject } from 'vue';
-import SelectionProvider from '../src/components/selectionProvider.vue';
+import { ref, computed } from 'vue';
+import SelectionWrapper from '../src/components/SelectionWrapper.vue';
 import VirtualMasonryGrid from '../src/components/VirtualMasonryGrid.vue';
 import type { SelectionEvent } from '../src/composables/useSelectionSystem';
 
 let itemIdCounter = 0;
-const items = ref([]);
+const items = ref<Array<{
+  id: string;
+  title: string;
+  color: string;
+  content: string;
+}>>([]);
 const selectedIds = ref<Set<string | number>>(new Set());
-const selectionProviderRef = ref<InstanceType<typeof SelectionProvider> | null>(null);
+const selectionWrapperRef = ref<InstanceType<typeof SelectionWrapper> | null>(null);
 
 const selectedCount = computed(() => selectedIds.value.size);
 
 const generateItems = (count: number) => {
-  const newItems = [];
+  const newItems: Array<{
+    id: string;
+    title: string;
+    color: string;
+    content: string;
+  }> = [];
   for (let i = 0; i < count; i++) {
     newItems.push({
       id: `item-${itemIdCounter++}`,
@@ -105,9 +115,9 @@ const handleFocusChange = (entityId: string | number | null) => {
 
 // 卡片点击处理
 const handleCardClick = (itemId: string | number, event: MouseEvent) => {
-  // 通过selectionProvider的API切换选择状态
-  if (selectionProviderRef.value) {
-    const selectionApi = (selectionProviderRef.value as any).selectionApi;
+  // 通过selectionWrapper的API切换选择状态
+  if (selectionWrapperRef.value) {
+    const selectionApi = selectionWrapperRef.value.selectionApi;
     if (selectionApi && selectionApi.toggle) {
       selectionApi.toggle(itemId, 'click');
     }
@@ -117,10 +127,10 @@ const handleCardClick = (itemId: string | number, event: MouseEvent) => {
 
 // 工具栏操作
 const selectAll = () => {
-  // 通过selectionProvider的API触发全选
-  if (selectionProviderRef.value) {
+  // 通过selectionWrapper的API触发全选
+  if (selectionWrapperRef.value) {
     // 获取selectionApi并调用selectAll方法
-    const selectionApi = (selectionProviderRef.value as any).selectionApi;
+    const selectionApi = selectionWrapperRef.value.selectionApi;
     if (selectionApi && selectionApi.selectAll) {
       selectionApi.selectAll();
     }
@@ -129,9 +139,9 @@ const selectAll = () => {
 };
 
 const clearSelection = () => {
-  // 通过selectionProvider的API清空选择
-  if (selectionProviderRef.value) {
-    const selectionApi = (selectionProviderRef.value as any).selectionApi;
+  // 通过selectionWrapper的API清空选择
+  if (selectionWrapperRef.value) {
+    const selectionApi = selectionWrapperRef.value.selectionApi;
     if (selectionApi && selectionApi.clear) {
       selectionApi.clear('programmatic');
     }

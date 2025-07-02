@@ -42,8 +42,8 @@
 
       <!-- 右侧测试区域 -->
       <div class="test-area">
-        <SelectionProvider 
-          ref="selectionProviderRef"
+        <SelectionWrapper 
+          ref="selectionWrapperRef"
           :mode="'multiple'" 
           :allow-empty="true"
           @selection-change="handleSelectionChange"
@@ -69,7 +69,7 @@
               </div>
             </div>
           </template>
-        </SelectionProvider>
+        </SelectionWrapper>
       </div>
     </div>
 
@@ -90,10 +90,10 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import SelectionProvider from '../src/components/selectionProvider.vue';
+import SelectionWrapper from '../src/components/SelectionWrapper.vue';
 import type { SelectionEvent } from '../src/composables/useSelectionSystem';
 
-const selectionProviderRef = ref<InstanceType<typeof SelectionProvider> | null>(null);
+const selectionWrapperRef = ref<InstanceType<typeof SelectionWrapper> | null>(null);
 const selectedIds = ref<Set<string>>(new Set());
 const focusedId = ref<string | null>(null);
 
@@ -140,8 +140,8 @@ const handleFocusChange = (entityId: string | number | null) => {
 
 // 项目点击处理
 const handleItemClick = (itemId: string, event: MouseEvent) => {
-  if (selectionProviderRef.value) {
-    const selectionApi = (selectionProviderRef.value as any).selectionApi;
+  if (selectionWrapperRef.value) {
+    const selectionApi = selectionWrapperRef.value.selectionApi;
     if (selectionApi && selectionApi.toggle) {
       selectionApi.toggle(itemId, 'click');
     }
@@ -150,8 +150,8 @@ const handleItemClick = (itemId: string, event: MouseEvent) => {
 
 // 工具栏操作
 const selectAll = () => {
-  if (selectionProviderRef.value) {
-    const selectionApi = (selectionProviderRef.value as any).selectionApi;
+  if (selectionWrapperRef.value) {
+    const selectionApi = selectionWrapperRef.value.selectionApi;
     if (selectionApi && selectionApi.selectAll) {
       selectionApi.selectAll();
     }
@@ -159,8 +159,8 @@ const selectAll = () => {
 };
 
 const clearSelection = () => {
-  if (selectionProviderRef.value) {
-    const selectionApi = (selectionProviderRef.value as any).selectionApi;
+  if (selectionWrapperRef.value) {
+    const selectionApi = selectionWrapperRef.value.selectionApi;
     if (selectionApi && selectionApi.clear) {
       selectionApi.clear('programmatic');
     }
@@ -168,8 +168,8 @@ const clearSelection = () => {
 };
 
 const selectFirst = () => {
-  if (selectionProviderRef.value && testItems.value.length > 0) {
-    const selectionApi = (selectionProviderRef.value as any).selectionApi;
+  if (selectionWrapperRef.value && testItems.value.length > 0) {
+    const selectionApi = selectionWrapperRef.value.selectionApi;
     if (selectionApi && selectionApi.select) {
       selectionApi.select(testItems.value[0].id, 'programmatic');
     }
@@ -177,8 +177,8 @@ const selectFirst = () => {
 };
 
 const selectLast = () => {
-  if (selectionProviderRef.value && testItems.value.length > 0) {
-    const selectionApi = (selectionProviderRef.value as any).selectionApi;
+  if (selectionWrapperRef.value && testItems.value.length > 0) {
+    const selectionApi = selectionWrapperRef.value.selectionApi;
     if (selectionApi && selectionApi.select) {
       selectionApi.select(testItems.value[testItems.value.length - 1].id, 'programmatic');
     }
@@ -188,8 +188,8 @@ const selectLast = () => {
 // 左侧面板交互方法
 const handleSelectedItemClick = (itemId: string) => {
   // 点击已选择项目时，将焦点设置到该项目
-  if (selectionProviderRef.value) {
-    const selectionApi = (selectionProviderRef.value as any).selectionApi;
+  if (selectionWrapperRef.value) {
+    const selectionApi = selectionWrapperRef.value.selectionApi;
     if (selectionApi && selectionApi.focus) {
       selectionApi.focus(itemId);
     }
@@ -198,8 +198,8 @@ const handleSelectedItemClick = (itemId: string) => {
 
 const removeSelectedItem = (itemId: string) => {
   // 移除单个选择项目
-  if (selectionProviderRef.value) {
-    const selectionApi = (selectionProviderRef.value as any).selectionApi;
+  if (selectionWrapperRef.value) {
+    const selectionApi = selectionWrapperRef.value.selectionApi;
     if (selectionApi && selectionApi.deselect) {
       selectionApi.deselect(itemId, 'programmatic');
     }

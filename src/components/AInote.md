@@ -9,6 +9,36 @@
 
 ## 修改记录
 
+### 2025-06-29 15:30 - 统一选择包装器组件
+**问题**: 存在多个选择相关的包装器组件（selectionProvider.vue, selectionBoxProvider.vue），功能分散，使用复杂
+
+**解决方案**:
+1. 创建了统一的 `SelectionWrapper.vue` 组件，合并所有选择功能
+2. 删除了旧的 `selectionProvider.vue` 和 `selectionBoxProvider.vue` 组件
+3. 更新了 `SelectionExample.vue` 使用新的统一包装器
+4. 保持了所有原有功能，包括鼠标选择、键盘导航、空间选择等
+
+**主要变更**:
+- `src/components/SelectionWrapper.vue` - 新增统一选择包装器
+- `src/components/selectionProvider.vue` - 删除（功能合并到SelectionWrapper）
+- `src/components/selectionBoxProvider.vue` - 删除（功能合并到SelectionWrapper）
+- `examples/SelectionExample.vue` - 更新为使用SelectionWrapper
+- `examples/SimpleSelectionTest.vue` - 更新为使用SelectionWrapper
+
+**新组件特性**:
+- 统一的选择API和事件系统
+- 灵活的功能开关（鼠标、键盘、空间选择）
+- 完整的样式配置选项
+- 内置选择框渲染
+- 自动DOM观察和元素识别
+- 丰富的暴露API
+
+**效果**:
+- 简化了组件结构，减少了重复代码
+- 提供了统一的使用接口
+- 保持了所有原有功能
+- 提高了代码的可维护性
+
 ### 2025-06-29 10:30 - 选择框定位修复
 **问题**: 鼠标移动时选择框不显示，定位上下文和坐标系统不匹配
 

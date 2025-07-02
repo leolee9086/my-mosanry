@@ -321,5 +321,6 @@ export function useSelectionBox(options: UseSelectionBoxOptions = {}) {
     stopPositionObserving,
     updatePositionElements,
     getElementPosition,
+    elementPositions,
   };
 } 

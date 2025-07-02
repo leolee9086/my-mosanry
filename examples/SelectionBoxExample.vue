@@ -83,11 +83,11 @@
         </table>
       </div>
 
-      <SelectionBoxProvider
+      <SelectionWrapper
         ref="selectionBoxRef"
         :mode="selectionMode"
         :enable-spatial-selection="enableSpatialSelection"
-        :enable-drag-selection="true"
+        :enable-mouse-selection="true"
         :enable-keyboard-selection="true"
         @selection-change="handleSelectionChange"
         @focus-change="handleFocusChange"
@@ -95,11 +95,11 @@
         @selection-box-start="handleSelectionBoxStart"
         @selection-box-update="handleSelectionBoxUpdate"
         @selection-box-end="handleSelectionBoxEnd"
-        style="position: relative;display: flex;"
-        :selectionBoxClass="'custom-selection-box'"
-        :selectionBoxStyle="{ border: '2px dashed #007bff', background: 'rgba(0,123,255,0.08)' }"
+        wrapper-style="position: relative;display: flex;"
+        selection-box-class="custom-selection-box"
+        :selection-box-style="{ border: '2px dashed #007bff', background: 'rgba(0,123,255,0.08)' }"
       >
-        <template #default="{ selectionApi, selectionBox, selectionBoxStyle }">
+        <template #default="{ selectionApi, selectionState, selectionBox, dragDirection }">
           <!-- 右侧网格内容 -->
           <div class="main-content">
             <div class="content-area">
@@ -132,18 +132,17 @@
         <!-- <template #selectionBoxContent="{ selectionBox }">
           <div class="custom-selection-info">自定义内容</div>
         </template> -->
-      </SelectionBoxProvider>
+      </SelectionWrapper>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue';
-import SelectionBoxProvider from '../src/components/selectionBoxProvider.vue';
-import SelectionBox from '../src/components/SelectionBox.vue';
+import SelectionWrapper from '../src/components/SelectionWrapper.vue';
 
 // 响应式状态
-const selectionBoxRef = ref<InstanceType<typeof SelectionBoxProvider> | null>(null);
+const selectionBoxRef = ref<InstanceType<typeof SelectionWrapper> | null>(null);
 const selectionMode = ref<'single' | 'multiple' | 'range'>('multiple');
 const enableSpatialSelection = ref(true);
 const selectedIds = ref<(string | number)[]>([]);
@@ -173,7 +172,7 @@ const currentSelectionApi = computed(() => {
 
 // 计算属性 - 获取位置缓存大小
 const positionCacheSize = computed(() => {
-  return selectionBoxRef.value?.elementPositions?.length || 0;
+  return selectionBoxRef.value?.elementPositions?.size || 0;
 });
 
 // 计算属性 - 获取拖拽方向文本

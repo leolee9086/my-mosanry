@@ -1,7 +1,9 @@
 <template>
   <div 
-    class="selection-box-provider" 
-    ref="providerRef"
+    class="selection-wrapper" 
+    :class="wrapperClass"
+    :style="wrapperStyle"
+    ref="wrapperRef"
     tabindex="0"
     @mousedown="handleMouseDown"
     @mousemove="handleMouseMove"
@@ -13,20 +15,21 @@
     <!-- 主要内容插槽 -->
     <slot 
       :selection-api="selectionApi" 
+      :selection-state="selectionState"
       :selection-box="selectionBoxState"
-      :selection-box-style="selectionBoxStyle"
+      :drag-direction="dragDirection"
     />
     
-    <!-- 选择框由Provider内部渲染，不再通过插槽暴露 -->
+    <!-- 内置选择框 -->
     <SelectionBox
       :visible="selectionBoxState.visible"
       :is-selecting="selectionBoxState.isSelecting"
       :selection-box-state="selectionBoxState"
       :z-index="selectionBoxZIndex"
       :class="selectionBoxClass"
-      :style="selectionBoxStyleProp"
+      :style="selectionBoxStyle"
     >
-      <!-- 内容装饰插槽，仅限于内容区 -->
+      <!-- 选择框内容装饰插槽 -->
       <template v-if="$slots.selectionBoxContent">
         <slot name="selectionBoxContent" :selection-box="selectionBoxState" />
       </template>
@@ -45,34 +48,47 @@ import SelectionBox from './SelectionBox.vue';
 type EntityId = string | number;
 type SelectionMode = 'single' | 'multiple' | 'range';
 
-interface SelectionBoxProviderProps {
+interface SelectionWrapperProps {
+  // 选择模式
   mode?: SelectionMode;
   allowEmpty?: boolean;
+  
+  // 选择方式开关
+  enableMouseSelection?: boolean;
+  enableKeyboardSelection?: boolean;
+  enableSpatialSelection?: boolean;
+  
+  // 元素识别
   elementFilter?: (element: Element) => boolean;
   idExtractor?: (element: Element) => EntityId;
+  
+  // 样式配置
+  wrapperClass?: string;
+  wrapperStyle?: any;
+  selectionBoxClass?: string;
+  selectionBoxStyle?: any;
+  selectionBoxZIndex?: number;
+  
+  // 事件回调
   onSelectionChange?: (event: any) => void;
   onFocusChange?: (entityId: EntityId | null) => void;
   onSelectionBoxChange?: (state: any) => void;
   onSelectionBoxStart?: (event: MouseEvent) => void;
   onSelectionBoxUpdate?: (event: MouseEvent) => void;
   onSelectionBoxEnd?: (event: MouseEvent) => void;
-  enableSpatialSelection?: boolean;
-  enableDragSelection?: boolean;
-  enableKeyboardSelection?: boolean;
-  selectionBoxClass?: string;
-  selectionBoxStyle?: any;
-  selectionBoxZIndex?: number;
 }
 
 // Props
-const props = withDefaults(defineProps<SelectionBoxProviderProps>(), {
+const props = withDefaults(defineProps<SelectionWrapperProps>(), {
   mode: 'multiple',
   allowEmpty: true,
+  enableMouseSelection: true,
+  enableKeyboardSelection: true,
+  enableSpatialSelection: false,
   elementFilter: (element: Element) => element.hasAttribute('data-selectable'),
   idExtractor: (element: Element) => element.getAttribute('data-id') || element.id,
-  enableSpatialSelection: false,
-  enableDragSelection: true,
-  enableKeyboardSelection: true,
+  wrapperClass: '',
+  wrapperStyle: undefined,
   selectionBoxClass: '',
   selectionBoxStyle: undefined,
   selectionBoxZIndex: 1000,
@@ -89,7 +105,7 @@ const emit = defineEmits<{
 }>();
 
 // 响应式状态
-const providerRef = ref<HTMLElement | null>(null);
+const wrapperRef = ref<HTMLElement | null>(null);
 
 // 使用选择系统
 const { selectionApi, selectionState } = useSelectionSystem({
@@ -105,24 +121,25 @@ const { selectionApi, selectionState } = useSelectionSystem({
   },
 });
 
-// 使用选择框状态管理
-const {
-  selectionBoxState,
-  selectionBoxStyle,
-  handleMouseDown: selectionBoxMouseDown,
-  handleMouseMove: selectionBoxMouseMove,
-  handleMouseUp: selectionBoxMouseUp,
-  startSelectionBox,
-  stopSelectionBox,
-  clearSelectionBox,
-  getSelectedEntityIds,
-  updateSpatialSelector,
-  setContainerRef,
-  startPositionObserving,
-  stopPositionObserving,
-  updatePositionElements,
-  dragDirection,
-} = useSelectionBox({
+  // 使用选择框状态管理
+  const {
+    selectionBoxState,
+    selectionBoxStyle,
+    handleMouseDown: selectionBoxMouseDown,
+    handleMouseMove: selectionBoxMouseMove,
+    handleMouseUp: selectionBoxMouseUp,
+    startSelectionBox,
+    stopSelectionBox,
+    clearSelectionBox,
+    getSelectedEntityIds,
+    updateSpatialSelector,
+    setContainerRef,
+    startPositionObserving,
+    stopPositionObserving,
+    updatePositionElements,
+    dragDirection,
+    elementPositions,
+  } = useSelectionBox({
   enableSpatialSelection: props.enableSpatialSelection,
   elementFilter: props.elementFilter,
   idExtractor: props.idExtractor,
@@ -143,7 +160,7 @@ const {
     props.onSelectionBoxEnd?.(event);
     
     // 自动选择框选中的元素
-    if (props.enableDragSelection) {
+    if (props.enableMouseSelection) {
       const selectedIds = getSelectedEntityIds();
       if (selectedIds && selectedIds.length > 0) {
         selectionApi.selectEntities(selectedIds);
@@ -154,7 +171,7 @@ const {
 
 // 使用选择观察者
 const { startObserving, stopObserving } = useSelectionObserver({
-  container: providerRef,
+  container: wrapperRef,
   elementFilter: props.elementFilter,
   idExtractor: props.idExtractor,
   onElementsChange: (elements) => {
@@ -175,17 +192,17 @@ const { startObserving, stopObserving } = useSelectionObserver({
 
 // 鼠标事件处理（条件性启用）
 const handleMouseDown = (event: MouseEvent) => {
-  if (!props.enableDragSelection) return;
+  if (!props.enableMouseSelection) return;
   selectionBoxMouseDown(event);
 };
 
 const handleMouseMove = (event: MouseEvent) => {
-  if (!props.enableDragSelection) return;
+  if (!props.enableMouseSelection) return;
   selectionBoxMouseMove(event);
 };
 
 const handleMouseUp = (event: MouseEvent) => {
-  if (!props.enableDragSelection) return;
+  if (!props.enableMouseSelection) return;
   selectionBoxMouseUp(event);
 };
 
@@ -215,8 +232,8 @@ const handleBlur = () => {
   selectionApi.blur();
 };
 
-// 提供选择框上下文给子组件
-provide('selection-box-context', {
+// 提供选择上下文给子组件
+provide('selection-context', {
   api: selectionApi,
   state: selectionState,
   selectionBox: selectionBoxState,
@@ -236,17 +253,17 @@ defineExpose({
   stopSelectionBox,
   clearSelectionBox,
   getSelectedEntityIds,
-  elementPositions: selectionBoxState.value.selectedElements, // 临时暴露，后续会改进
   dragDirection,
+  elementPositions,
 });
 
 // 生命周期
 onMounted(() => {
   // 确保容器可以获得焦点
-  if (providerRef.value) {
-    providerRef.value.focus();
+  if (wrapperRef.value) {
+    wrapperRef.value.focus();
     // 设置容器引用给选择框状态管理
-    setContainerRef(providerRef.value);
+    setContainerRef(wrapperRef.value);
   }
   
   // 开始观察DOM变化
@@ -274,15 +291,10 @@ onUnmounted(() => {
   // 清理容器引用
   setContainerRef(null);
 });
-
-// 计算选择框样式
-const selectionBoxStyleProp = computed(() => {
-  return props.selectionBoxStyle || {};
-});
 </script>
 
 <style scoped>
-.selection-box-provider {
+.selection-wrapper {
   outline: none;
   position: relative;
   width: 100%;
@@ -291,7 +303,7 @@ const selectionBoxStyleProp = computed(() => {
 }
 
 /* 可选：添加自定义焦点样式 */
-.selection-box-provider:focus {
+.selection-wrapper:focus {
   /* 可以添加一些视觉提示 */
 }
 </style> 
