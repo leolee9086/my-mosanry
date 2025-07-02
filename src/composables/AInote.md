@@ -198,6 +198,65 @@
 - **原因**: 原代码中存在多个内部函数定义，违反了函数式编程的最佳实践，影响代码的可读性和可维护性。
 - **变更**:
   - 提取 `computeCheckForLoadMore` 函数：专门负责检查是否需要加载更多数据的逻辑
+
+## 2025-06-29 23:30
+
+### 坐标换算修正 - 位置观察器实现
+
+- **修复**: 实现了基于ResizeObserver的位置观察器，解决了选择框坐标换算的性能问题。
+- **原因**: 原实现中每次鼠标移动都调用 `getBoundingClientRect()` 获取元素位置，性能很差。需要实现坐标缓存机制。
+- **变更**:
+  - **新建 `usePositionObserver.ts`**: 创建专门的位置观察器，使用ResizeObserver监听元素位置变化
+    - 使用Map缓存元素位置信息
+    - 只在元素大小/位置真正变化时更新
+    - 使用requestAnimationFrame确保性能
+  - **修改 `useSelectionBox.ts`**: 集成位置观察器
+    - 导入 `usePositionObserver` 和 `isRectIntersecting`
+    - 添加位置观察器实例和相关方法
+    - 修改 `handleMouseMove` 使用缓存的坐标进行相交检测
+    - 暴露位置观察器方法给外部使用
+  - **修改 `selectionBoxProvider.vue`**: 协调观察器工作
+    - 解构位置观察器方法
+    - 在 `onElementsChange` 中调用 `updatePositionElements`
+    - 在生命周期中启动和停止位置观察
+  - **修改 `SelectionBoxExample.vue`**: 启用空间选择器
+    - 将 `enableSpatialSelection` 默认值改为 `true`
+    - 添加位置缓存大小显示到状态栏
+- **好处**:
+  - **高性能**: 只在必要时更新位置信息，避免重复的getBoundingClientRect调用
+  - **准确性**: ResizeObserver确保位置信息实时准确
+  - **一致性**: 所有组件使用统一的位置数据源
+  - **可维护性**: 基于项目现有的observer模式，代码结构清晰
+
+## 2025-06-29 23:45
+
+### 左交右框选择功能实现
+
+- **新增**: 实现了惯例的左交右框选择功能，根据拖拽方向采用不同的选择策略。
+- **原因**: 用户要求实现更智能的选择交互，从左向右拖拽时只选择完全包含的元素，从右向左拖拽时选择相交的元素。
+- **变更**:
+  - **修改 `useSelectionBox.ts`**: 添加拖拽方向检测和选择策略
+    - 添加 `dragDirection` 状态跟踪拖拽方向
+    - 在 `handleMouseDown` 中重置拖拽方向
+    - 在 `handleMouseMove` 中检测拖拽方向（5px阈值避免误判）
+    - 根据拖拽方向选择不同的检测策略：
+      - `left-to-right`: 使用 `isRectContaining` 实现框选模式
+      - `right-to-left`: 使用 `isRectIntersecting` 实现相交模式
+    - 暴露 `dragDirection` 给外部使用
+  - **修改 `selectionBoxProvider.vue`**: 暴露拖拽方向信息
+    - 解构 `dragDirection` 并暴露给父组件
+  - **修改 `SelectionBoxExample.vue`**: 添加拖拽方向显示
+    - 添加 `dragDirectionText` 计算属性显示当前拖拽模式
+    - 在状态栏显示拖拽方向信息
+- **功能说明**:
+  - **从左向右拖拽**: 只有完全位于选择框内部的元素才会被选中（框选模式）
+  - **从右向左拖拽**: 位于选择框内部或与选择框相交的元素被选中（相交模式）
+  - **智能检测**: 5px阈值避免误判，确保拖拽方向检测的准确性
+- **好处**:
+  - **用户体验**: 提供更直观和符合习惯的选择交互
+  - **精确控制**: 框选模式适合精确选择，相交模式适合快速选择
+  - **视觉反馈**: 状态栏显示当前拖拽模式，用户清楚了解选择行为
+  - **性能优化**: 基于已有的位置观察器，无需额外性能开销
   - 提取 `createHandleScroll` 函数：创建滚动处理函数，返回 `handleScroll` 和 `scrollTimeout`
   - 提取 `createIgnoreScrollEventsFor` 函数：创建忽略滚动事件的函数，返回 `ignoreScrollEventsFor` 和 `ignoreTimeout`
   - 主函数 `useScrollObserver` 简化为组合这些外部函数

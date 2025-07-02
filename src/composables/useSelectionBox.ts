@@ -1,6 +1,7 @@
 import { ref, computed, type Ref } from 'vue';
 import type { EntityId } from './useSelectionSystem';
-import { createDefaultSpatialSelector } from './select-engines';
+import { createDefaultSpatialSelector, isRectIntersecting, isRectContaining } from './select-engines';
+import { usePositionObserver } from './usePositionObserver';
 
 // 类型定义
 export interface SelectionBoxState {
@@ -58,8 +59,40 @@ export function useSelectionBox(options: UseSelectionBoxOptions = {}) {
     selectedElements: [],
   });
 
+  // 拖拽方向状态
+  const dragDirection = ref<'left-to-right' | 'right-to-left' | null>(null);
+
   // 空间选择器（按需创建）
   const spatialSelector = enableSpatialSelection ? createDefaultSpatialSelector() : null;
+
+  // 位置观察器（按需创建）
+  const positionObserverElements = ref<Element[]>([]);
+  const { 
+    startObserving: startPositionObserving,
+    stopObserving: stopPositionObserving,
+    updateElements: updatePositionElements,
+    getElementPosition,
+    elementPositions
+  } = usePositionObserver({
+    elements: positionObserverElements.value,
+    onPositionChange: (positions) => {
+      // 位置变化时更新空间选择器
+      if (spatialSelector) {
+        const elements = Array.from(positions.keys());
+        spatialSelector.rebuild(elements, (element) => {
+          const rect = positions.get(element)!;
+          return {
+            left: rect.left,
+            top: rect.top,
+            right: rect.right,
+            bottom: rect.bottom,
+            width: rect.width,
+            height: rect.height,
+          };
+        });
+      }
+    }
+  });
 
   // 计算选择框样式
   const selectionBoxStyle = computed(() => ({
@@ -105,6 +138,7 @@ export function useSelectionBox(options: UseSelectionBoxOptions = {}) {
     
     isMouseDown.value = true;
     isDragging.value = false;
+    dragDirection.value = null;
     
     // 直接使用屏幕坐标，不减去容器偏移
     const x = event.clientX;
@@ -152,14 +186,45 @@ export function useSelectionBox(options: UseSelectionBoxOptions = {}) {
     selectionBoxState.value.width = width;
     selectionBoxState.value.height = height;
     
+    // 检测拖拽方向（只在开始拖拽时检测一次）
+    if (!dragDirection.value && width > 5) { // 5px阈值避免误判
+      dragDirection.value = x > selectionBoxState.value.startX ? 'left-to-right' : 'right-to-left';
+    }
+    
     // 检测相交的元素
     if (spatialSelector) {
       const queryRect = { left, top, right: left + width, bottom: top + height, width, height };
       const selectableElements = Array.from(containerRef.value?.querySelectorAll('[data-selectable]') || []);
       
       if (selectableElements.length > 0) {
-        const intersectingElements = spatialSelector.queryIntersecting(selectableElements, queryRect);
-        selectionBoxState.value.selectedElements = intersectingElements || [];
+        // 根据拖拽方向选择不同的检测策略
+        const intersectingElements = selectableElements.filter(element => {
+          const rect = getElementPosition(element);
+          if (!rect) return false;
+          
+          const elementRect = {
+            left: rect.left,
+            top: rect.top,
+            right: rect.right,
+            bottom: rect.bottom,
+            width: rect.width,
+            height: rect.height
+          };
+          
+          // 左交右框选择逻辑
+          if (dragDirection.value === 'left-to-right') {
+            // 从左向右：只有完全位于选择框内部的元素才会被选中（框选模式）
+            return isRectContaining(queryRect, elementRect);
+          } else if (dragDirection.value === 'right-to-left') {
+            // 从右向左：位于选择框内部或与选择框相交的元素被选中（相交模式）
+            return isRectIntersecting(queryRect, elementRect);
+          } else {
+            // 未确定方向时，默认使用相交模式
+            return isRectIntersecting(queryRect, elementRect);
+          }
+        });
+        
+        selectionBoxState.value.selectedElements = intersectingElements;
       } else {
         selectionBoxState.value.selectedElements = [];
       }
@@ -230,6 +295,7 @@ export function useSelectionBox(options: UseSelectionBoxOptions = {}) {
     selectionBoxStyle,
     isMouseDown,
     isDragging,
+    dragDirection,
     
     // 引用
     containerRef,
@@ -248,5 +314,11 @@ export function useSelectionBox(options: UseSelectionBoxOptions = {}) {
     // 工具方法
     getSelectedEntityIds,
     updateSpatialSelector,
+    
+    // 位置观察器方法
+    startPositionObserving,
+    stopPositionObserving,
+    updatePositionElements,
+    getElementPosition,
   };
 } 

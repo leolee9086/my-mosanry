@@ -48,6 +48,14 @@
         <span class="label">目标数量:</span>
         <span class="value">{{ items.length }} 个</span>
       </div>
+      <div class="status-item">
+        <span class="label">位置缓存:</span>
+        <span class="value">{{ positionCacheSize }} 个</span>
+      </div>
+      <div class="status-item">
+        <span class="label">拖拽方向:</span>
+        <span class="value">{{ dragDirectionText }}</span>
+      </div>
     </div>
 
     <!-- 主要内容区域 -->
@@ -123,7 +131,7 @@ import SelectionBox from '../src/components/SelectionBox.vue';
 // 响应式状态
 const selectionBoxRef = ref<InstanceType<typeof SelectionBoxProvider> | null>(null);
 const selectionMode = ref<'single' | 'multiple' | 'range'>('multiple');
-const enableSpatialSelection = ref(false);
+const enableSpatialSelection = ref(true);
 const selectedIds = ref<(string | number)[]>([]);
 const focusedId = ref<string | number | null>(null);
 const mousePosition = reactive({ x: 0, y: 0 });
@@ -147,6 +155,18 @@ const items = ref(Array.from({ length: 20 }, (_, i) => ({
 // 计算属性 - 获取当前选择状态
 const currentSelectionApi = computed(() => {
   return selectionBoxRef.value?.selectionApi || null;
+});
+
+// 计算属性 - 获取位置缓存大小
+const positionCacheSize = computed(() => {
+  return selectionBoxRef.value?.elementPositions?.length || 0;
+});
+
+// 计算属性 - 获取拖拽方向文本
+const dragDirectionText = computed(() => {
+  const direction = selectionBoxRef.value?.dragDirection;
+  if (!direction) return '未开始';
+  return direction === 'left-to-right' ? '左→右 (框选)' : '右→左 (相交)';
 });
 
 // 鼠标位置跟踪

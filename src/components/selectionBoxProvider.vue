@@ -103,6 +103,10 @@ const {
   getSelectedEntityIds,
   updateSpatialSelector,
   setContainerRef,
+  startPositionObserving,
+  stopPositionObserving,
+  updatePositionElements,
+  dragDirection,
 } = useSelectionBox({
   enableSpatialSelection: props.enableSpatialSelection,
   elementFilter: props.elementFilter,
@@ -147,9 +151,9 @@ const { startObserving, stopObserving } = useSelectionObserver({
       selectionApi.updateNavigableEntities([]);
     }
     
-    // 更新空间选择器
+    // 更新位置观察器
     if (props.enableSpatialSelection && elements && elements.length > 0) {
-      updateSpatialSelector(elements);
+      updatePositionElements(elements);
     }
   },
 });
@@ -217,6 +221,8 @@ defineExpose({
   stopSelectionBox,
   clearSelectionBox,
   getSelectedEntityIds,
+  elementPositions: selectionBoxState.value.selectedElements, // 临时暴露，后续会改进
+  dragDirection,
 });
 
 // 生命周期
@@ -230,11 +236,19 @@ onMounted(() => {
   
   // 开始观察DOM变化
   startObserving();
+  
+  // 开始位置观察
+  if (props.enableSpatialSelection) {
+    startPositionObserving();
+  }
 });
 
 onUnmounted(() => {
   // 停止观察
   stopObserving();
+  
+  // 停止位置观察
+  stopPositionObserving();
   
   // 清理状态
   if (selectionApi) {
