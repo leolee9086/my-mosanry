@@ -83,22 +83,39 @@
         </table>
       </div>
 
-      <SelectionBoxProvider ref="selectionBoxRef" :mode="selectionMode"
-        :enable-spatial-selection="enableSpatialSelection" :enable-drag-selection="true"
-        :enable-keyboard-selection="true" @selection-change="handleSelectionChange" @focus-change="handleFocusChange"
-        @selection-box-change="handleSelectionBoxChange" @selection-box-start="handleSelectionBoxStart"
-        @selection-box-update="handleSelectionBoxUpdate" @selection-box-end="handleSelectionBoxEnd"
-        style="position: relative;display: flex;">
+      <SelectionBoxProvider
+        ref="selectionBoxRef"
+        :mode="selectionMode"
+        :enable-spatial-selection="enableSpatialSelection"
+        :enable-drag-selection="true"
+        :enable-keyboard-selection="true"
+        @selection-change="handleSelectionChange"
+        @focus-change="handleFocusChange"
+        @selection-box-change="handleSelectionBoxChange"
+        @selection-box-start="handleSelectionBoxStart"
+        @selection-box-update="handleSelectionBoxUpdate"
+        @selection-box-end="handleSelectionBoxEnd"
+        style="position: relative;display: flex;"
+        :selectionBoxClass="'custom-selection-box'"
+        :selectionBoxStyle="{ border: '2px dashed #007bff', background: 'rgba(0,123,255,0.08)' }"
+      >
         <template #default="{ selectionApi, selectionBox, selectionBoxStyle }">
           <!-- 右侧网格内容 -->
           <div class="main-content">
             <div class="content-area">
               <div class="grid-container">
-                <div v-for="item in items" :key="item.id" :data-selectable="true" :data-id="item.id" class="grid-item"
-                  :class="{
+                <div
+                  v-for="item in items"
+                  :key="item.id"
+                  :data-selectable="true"
+                  :data-id="item.id"
+                  class="grid-item"
+                  :class="{ 
                     'selected': selectionApi?.isSelected?.(item.id),
                     'focused': selectionApi?.isFocused?.(item.id)
-                  }" @click="handleItemClick(item.id, $event)">
+                  }"
+                  @click="handleItemClick(item.id, $event)"
+                >
                   <div class="item-content">
                     <h4>{{ item.title }}</h4>
                     <p>{{ item.description }}</p>
@@ -111,13 +128,10 @@
             </div>
           </div>
         </template>
-        <!-- 选择框插槽 -->
-        <template #selection-box="{ selectionBox, selectionBoxStyle }">
-          <SelectionBox :visible="selectionBox?.visible" :is-selecting="selectionBox?.isSelecting"
-            :selection-box-state="selectionBox" :z-index="1000">
-            <!-- 自定义选择框内容 -->
-          </SelectionBox>
-        </template>
+        <!-- 可选：内容装饰插槽，如有需要可保留 -->
+        <!-- <template #selectionBoxContent="{ selectionBox }">
+          <div class="custom-selection-info">自定义内容</div>
+        </template> -->
       </SelectionBoxProvider>
     </div>
   </div>

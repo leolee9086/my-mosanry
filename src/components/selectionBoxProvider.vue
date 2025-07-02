@@ -17,20 +17,29 @@
       :selection-box-style="selectionBoxStyle"
     />
     
-    <!-- 选择框插槽 -->
-    <slot 
-      name="selection-box"
-      :selection-box="selectionBoxState"
-      :selection-box-style="selectionBoxStyle"
-    />
+    <!-- 选择框由Provider内部渲染，不再通过插槽暴露 -->
+    <SelectionBox
+      :visible="selectionBoxState.visible"
+      :is-selecting="selectionBoxState.isSelecting"
+      :selection-box-state="selectionBoxState"
+      :z-index="selectionBoxZIndex"
+      :class="selectionBoxClass"
+      :style="selectionBoxStyleProp"
+    >
+      <!-- 内容装饰插槽，仅限于内容区 -->
+      <template v-if="$slots.selectionBoxContent">
+        <slot name="selectionBoxContent" :selection-box="selectionBoxState" />
+      </template>
+    </SelectionBox>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, provide, onMounted, onUnmounted, defineExpose } from 'vue';
+import { ref, provide, onMounted, onUnmounted, defineExpose, computed } from 'vue';
 import { useSelectionSystem } from '../composables/useSelectionSystem';
 import { useSelectionObserver } from '../composables/useSelectionObserver';
 import { useSelectionBox } from '../composables/useSelectionBox';
+import SelectionBox from './SelectionBox.vue';
 
 // 类型定义
 type EntityId = string | number;
@@ -50,6 +59,9 @@ interface SelectionBoxProviderProps {
   enableSpatialSelection?: boolean;
   enableDragSelection?: boolean;
   enableKeyboardSelection?: boolean;
+  selectionBoxClass?: string;
+  selectionBoxStyle?: any;
+  selectionBoxZIndex?: number;
 }
 
 // Props
@@ -61,6 +73,9 @@ const props = withDefaults(defineProps<SelectionBoxProviderProps>(), {
   enableSpatialSelection: false,
   enableDragSelection: true,
   enableKeyboardSelection: true,
+  selectionBoxClass: '',
+  selectionBoxStyle: undefined,
+  selectionBoxZIndex: 1000,
 });
 
 // Emits
@@ -258,6 +273,11 @@ onUnmounted(() => {
   
   // 清理容器引用
   setContainerRef(null);
+});
+
+// 计算选择框样式
+const selectionBoxStyleProp = computed(() => {
+  return props.selectionBoxStyle || {};
 });
 </script>
 

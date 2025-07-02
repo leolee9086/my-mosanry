@@ -244,7 +244,8 @@ export function useSelectionBox(options: UseSelectionBoxOptions = {}) {
     
     isMouseDown.value = false;
     
-    if (isDragging.value && selectionBoxState.value.isSelecting) {
+    // 无论是否拖拽，都要结束选择框状态
+    if (selectionBoxState.value.isSelecting) {
       // 完成选择
       selectionBoxState.value.isSelecting = false;
       selectionBoxState.value.visible = false;

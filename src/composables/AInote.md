@@ -257,6 +257,34 @@
   - **精确控制**: 框选模式适合精确选择，相交模式适合快速选择
   - **视觉反馈**: 状态栏显示当前拖拽模式，用户清楚了解选择行为
   - **性能优化**: 基于已有的位置观察器，无需额外性能开销
+
+## 2025-06-29 23:50
+
+### 选择框短暂点击消失问题修正
+
+- **修复**: 修正了短暂点击时选择框不会正确消失的问题。
+- **原因**: 在 `handleMouseUp` 中，只有当 `isDragging.value` 为 `true` 时才会隐藏选择框。但在短暂点击时，用户没有拖拽，所以 `isDragging.value` 保持为 `false`，导致选择框不会隐藏。
+- **变更**:
+  - **修改 `useSelectionBox.ts` 中的 `handleMouseUp` 方法**:
+    - 移除了对 `isDragging.value` 的检查条件
+    - 改为只要 `selectionBoxState.value.isSelecting` 为 `true` 就结束选择框状态
+    - 确保无论是否拖拽，选择框都能正确隐藏
+- **修正前**:
+  ```typescript
+  if (isDragging.value && selectionBoxState.value.isSelecting) {
+    // 只有拖拽时才隐藏选择框
+  }
+  ```
+- **修正后**:
+  ```typescript
+  if (selectionBoxState.value.isSelecting) {
+    // 无论是否拖拽，都要结束选择框状态
+  }
+  ```
+- **好处**:
+  - **行为一致性**: 短暂点击和拖拽选择都能正确隐藏选择框
+  - **用户体验**: 避免了选择框残留的视觉干扰
+  - **逻辑清晰**: 选择框的显示/隐藏逻辑更加简单明确
   - 提取 `createHandleScroll` 函数：创建滚动处理函数，返回 `handleScroll` 和 `scrollTimeout`
   - 提取 `createIgnoreScrollEventsFor` 函数：创建忽略滚动事件的函数，返回 `ignoreScrollEventsFor` 和 `ignoreTimeout`
   - 主函数 `useScrollObserver` 简化为组合这些外部函数

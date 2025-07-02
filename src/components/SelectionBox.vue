@@ -3,15 +3,15 @@
     v-show="visible" 
     class="selection-box"
     :style="boxStyle"
-    :class="{ 
+    :class="[props.class, { 
       'selection-box--active': isSelecting,
       'selection-box--custom': !!$slots.default
-    }"
+    }]"
   >
     <!-- 默认选择框边框 - 始终显示 -->
     <div class="selection-box__border"></div>
     
-    <!-- 自定义选择框内容 - 覆盖在边框上方 -->
+    <!-- 内容装饰插槽，仅限于内容区 -->
     <slot v-if="$slots.default" :selection-box="props.selectionBoxState || {
       visible: props.visible,
       isSelecting: props.isSelecting,
@@ -39,6 +39,8 @@ interface Props {
   selectionBoxState?: SelectionBoxState;
   renderMode?: 'default' | 'custom';
   zIndex?: number;
+  class?: string;
+  style?: any;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -50,6 +52,8 @@ const props = withDefaults(defineProps<Props>(), {
   height: 0,
   renderMode: 'default',
   zIndex: 1000,
+  class: '',
+  style: undefined,
 });
 
 // 计算选择框样式
@@ -60,6 +64,7 @@ const boxStyle = computed(() => {
     width: `${props.width}px`,
     height: `${props.height}px`,
     zIndex: props.zIndex,
+    ...props.style,
   };
 
   // 如果提供了完整的selectionBoxState，使用其数据
