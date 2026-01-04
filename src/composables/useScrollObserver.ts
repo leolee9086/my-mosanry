@@ -1,31 +1,12 @@
-import { ref, onMounted, onUnmounted, Ref, watch } from 'vue';
+import { ref, onMounted, onUnmounted, Ref } from 'vue';
 import { throttle } from '../utils/throttle';
 
 export interface UseScrollObserverOptions {
     scrollContainer: Ref<HTMLElement | null>;
-    onLoadMore: () => void;
-    totalHeight: Ref<number>;
-}
-
-/**
- * 检查是否需要加载更多数据
- */
-function computeCheckForLoadMore(
-    scrollContainer: Ref<HTMLElement | null>,
-    scrollTop: Ref<number>,
-    totalHeight: Ref<number>,
-    onLoadMore: () => void
-) {
-    const container = scrollContainer.value;
-    if (!container) return;
-    
-    const clientHeight = container.clientHeight;
-    const scrollBottom = scrollTop.value + clientHeight;
-    
-    const loadMoreThreshold = clientHeight * 2.5;
-    if (totalHeight.value > 0 && scrollBottom >= totalHeight.value - loadMoreThreshold) {
-        onLoadMore();
-    }
+    onScroll?: (scrollTop: number, scrollDirection: 'up' | 'down' | 'none') => void;
+    onScrollSettled?: (scrollTop: number) => void;
+    throttleTime?: number;
+    scrollSettleTime?: number;
 }
 
 /**
@@ -36,33 +17,47 @@ function createHandleScroll(
     scrollTop: Ref<number>,
     isScrolling: Ref<boolean>,
     isScrollIgnored: Ref<boolean>,
-    onLoadMore: () => void,
-    totalHeight: Ref<number>
+    scrollDirection: Ref<'up' | 'down' | 'none'>,
+    onScroll?: (scrollTop: number, scrollDirection: 'up' | 'down' | 'none') => void,
+    onScrollSettled?: (scrollTop: number) => void,
+    throttleTime: number = 50,
+    scrollSettleTime: number = 150
 ) {
     let scrollTimeout: ReturnType<typeof setTimeout> | null = null;
-    
-    const checkForLoadMore = () => computeCheckForLoadMore(
-        scrollContainer, 
-        scrollTop, 
-        totalHeight, 
-        onLoadMore
-    );
+    let lastScrollTop = 0;
     
     const handleScroll = throttle(() => {
         if (!scrollContainer.value || isScrollIgnored.value) return;
 
-        scrollTop.value = scrollContainer.value.scrollTop;
+        const currentScrollTop = scrollContainer.value.scrollTop;
+        
+        if (currentScrollTop > lastScrollTop) {
+            scrollDirection.value = 'down';
+        } else if (currentScrollTop < lastScrollTop) {
+            scrollDirection.value = 'up';
+        }
+        
+        scrollTop.value = currentScrollTop;
+        lastScrollTop = currentScrollTop;
+        
+        if (onScroll) {
+            onScroll(currentScrollTop, scrollDirection.value);
+        }
 
         isScrolling.value = true;
         if (scrollTimeout) {
             clearTimeout(scrollTimeout);
         }
+        
         scrollTimeout = setTimeout(() => {
             isScrolling.value = false;
-        }, 150);
-
-        checkForLoadMore();
-    }, 50);
+            scrollDirection.value = 'none';
+            
+            if (onScrollSettled) {
+                onScrollSettled(scrollTop.value);
+            }
+        }, scrollSettleTime);
+    }, throttleTime);
     
     return { handleScroll, scrollTimeout };
 }
@@ -87,35 +82,35 @@ function createIgnoreScrollEventsFor(isScrollIgnored: Ref<boolean>) {
 }
 
 /**
- * 观察滚动容器的状态，提供滚动位置、滚动状态，并处理无限加载回调。
+ * 观察滚动容器的状态，提供滚动位置、滚动方向和滚动状态
  * @param options - 配置选项
+ * @returns 滚动状态相关的响应式对象
  */
-export function useScrollObserver({ scrollContainer, onLoadMore, totalHeight }: UseScrollObserverOptions) {
+export function useScrollObserver({ 
+    scrollContainer, 
+    onScroll, 
+    onScrollSettled,
+    throttleTime = 50,
+    scrollSettleTime = 150
+}: UseScrollObserverOptions) {
     const scrollTop = ref(0);
     const isScrolling = ref(false);
     const isScrollIgnored = ref(false);
+    const scrollDirection = ref<'up' | 'down' | 'none'>('none');
 
     const { handleScroll, scrollTimeout } = createHandleScroll(
         scrollContainer,
         scrollTop,
         isScrolling,
         isScrollIgnored,
-        onLoadMore,
-        totalHeight
+        scrollDirection,
+        onScroll,
+        onScrollSettled,
+        throttleTime,
+        scrollSettleTime
     );
 
     const { ignoreScrollEventsFor, ignoreTimeout } = createIgnoreScrollEventsFor(isScrollIgnored);
-
-    const checkForLoadMore = () => computeCheckForLoadMore(
-        scrollContainer, 
-        scrollTop, 
-        totalHeight, 
-        onLoadMore
-    );
-
-    watch(totalHeight, () => {
-        requestAnimationFrame(checkForLoadMore);
-    });
 
     onMounted(() => {
         if (scrollContainer.value) {
@@ -138,6 +133,7 @@ export function useScrollObserver({ scrollContainer, onLoadMore, totalHeight }: 
     return {
         scrollTop,
         isScrolling,
+        scrollDirection,
         ignoreScrollEventsFor,
     };
 } 

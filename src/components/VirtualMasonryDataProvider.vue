@@ -4,6 +4,7 @@
     v-bind="$props"
     :items="items"
     :estimated-total-count="totalCount"
+    :managed-by-provider="true"
     @scroll-settled="handleScrollSettled"
   >
     <template #default="slotProps">

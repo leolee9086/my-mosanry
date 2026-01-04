@@ -42,6 +42,7 @@ interface Props {
     scrollToIndex?: number;
     scrollToOptions?: ScrollIntoViewOptions;
     mode?: 'masonry' | 'grid' | 'justified' | 'list';
+    managedByProvider?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -53,11 +54,13 @@ const props = withDefaults(defineProps<Props>(), {
     itemHeight: undefined,
     estimatedTotalCount: undefined,
     mode: 'masonry',
+    managedByProvider: false,
 });
 
 const emit = defineEmits<{
     (e: 'load-more'): void;
     (e: 'scroll-settled', visibleItemIndices: number[]): void;
+    (e: 'scroll', scrollTop: number, direction: 'up' | 'down' | 'none'): void;
 }>();
 const scrollContainer = ref<HTMLElement | null>(null);
 const containerWidth = ref(0);
@@ -65,10 +68,19 @@ const containerHeight = ref(0);
 const totalHeight = ref(0); // @织: 提前定义
 
 // --- 2. 滚动观察者 (提前) ---
-const { scrollTop, isScrolling, ignoreScrollEventsFor } = useScrollObserver({
+const { scrollTop, isScrolling, scrollDirection, ignoreScrollEventsFor } = useScrollObserver({
     scrollContainer,
-    totalHeight: totalHeight, 
-    onLoadMore: () => emit('load-more'),
+    onScroll: (currentScrollTop, direction) => {
+        // 将滚动事件抛出给父组件
+        emit('scroll', currentScrollTop, direction);
+    },
+    onScrollSettled: (currentScrollTop) => {
+        // 滚动停止时，如果有可见项，触发 scroll-settled 事件
+        const visibleIndices = visibleItems.value.map(item => item.index);
+        if (visibleIndices.length > 0) {
+            emit('scroll-settled', visibleIndices);
+        }
+    }
 });
 
 // 保存滚动位置相关的状态
@@ -206,7 +218,6 @@ const getItemStyle = (item: LayoutItem) => ({
 
 // --- DOM Refs and Measurement ---
 const itemWrapperElements = new Map<any, HTMLElement>();
-const mutationObservers = new Map<any, MutationObserver>();
 const contentToIdMap = new WeakMap<Element, any>();
 
 // 1. ResizeObserver 负责最终的尺寸测量
@@ -306,6 +317,17 @@ watch([containerWidth, () => props.columnWidth, () => props.gap, () => props.row
 
 // --- 生命周期与 DOM 观察 ---
 onMounted(() => {
+    // 检查是否被 DataProvider 管理，如果不是，显示警告
+    if (!props.managedByProvider) {
+        console.warn(
+            '%c[VirtualMasonryGrid] 警告：您正在直接使用 VirtualMasonryGrid 组件。' +
+            '\n建议使用 VirtualMasonryDataProvider 组件进行封装，以获得更好的数据加载体验。' +
+            '\n直接使用 VirtualMasonryGrid 需要自行处理数据加载、占位符和动态高度等复杂逻辑。' +
+            '\n查看示例: examples/layout/data-provider.vue',
+            'color: #ff9800; font-weight: bold;'
+        );
+    }
+
     if (!scrollContainer.value) return;
     const resizeObserver = new ResizeObserver(entries => {
         if (entries[0]) {

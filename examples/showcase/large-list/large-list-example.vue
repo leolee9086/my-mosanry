@@ -4,7 +4,7 @@
     <div class="control-panel">
       <div class="stats">
         <span>总项目: {{ totalItems.toLocaleString() }}</span>
-        <span>已渲染: {{ renderedCount }}</span>
+        <span>已渲染: {{ loadedItemsCount }}</span>
         <span>已选择: {{ selectedCount }}</span>
         <span>焦点: {{ focusedItem?.title || '无' }}</span>
       </div>
@@ -29,15 +29,15 @@
         @focus-change="handleFocusChange"
       >
         <template #default="{ selectionApi }">
-          <VirtualMasonryGrid
+          <VirtualMasonryDataProvider
             class="large-list"
-            :items="listItems"
+            :total-count="totalItems"
+            :data-fetcher="fetchData"
             mode="list"
             :item-height="(item) => 80"
             :gap="8"
-            :estimated-total-count="totalItems"
-            id-key="id"
-            @load-more="loadMoreItems"
+            :overscan-by="3"
+            @scroll="handleScroll"
             @scroll-settled="handleScrollSettled"
           >
             <template #default="{ item, isScrolling }">
@@ -49,7 +49,12 @@
                 @click="handleItemClick(item.id)"
               />
             </template>
-          </VirtualMasonryGrid>
+            <template #placeholder="{ index }">
+              <div class="placeholder-item" :data-index="index">
+                <div class="placeholder-content">加载中...</div>
+              </div>
+            </template>
+          </VirtualMasonryDataProvider>
         </template>
       </SelectionWrapper>
     </div>
@@ -73,25 +78,27 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import SelectionWrapper from '../../../src/components/SelectionWrapper.vue';
-import VirtualMasonryGrid from '../../../src/components/VirtualMasonryGrid.vue';
+import VirtualMasonryDataProvider from '../../../src/components/VirtualMasonryDataProvider.vue';
 import ListItem from './ListItem.vue';
 import type { SelectionEvent } from '../../../src/composables/useSelectionSystem';
+import type { DataItem } from '../../../src/composables/useVirtualDataSource';
 
 // 类型定义
-interface ListItemData {
-  id: string;
+interface ListItemData extends DataItem {
+  id: string; // 必须包含 DataItem 要求的 id 字段
   title: string;
   description: string;
   category: string;
   priority: number;
   timestamp: number;
+  index: number; // 添加索引字段以便于映射
 }
 
 // 响应式状态
 const selectionWrapperRef = ref<InstanceType<typeof SelectionWrapper> | null>(null);
-const listItems = ref<ListItemData[]>([]);
+const itemsCache = new Map<number, ListItemData>();
 const selectedIds = ref<Set<string>>(new Set());
 const focusedItem = ref<ListItemData | null>(null);
 const scrollPosition = ref(0);
@@ -100,52 +107,74 @@ const memoryUsage = ref(0);
 
 // 配置
 const totalItems = 5000;
-const batchSize = 100;
 let itemIdCounter = 0;
 
 // 计算属性
 const selectedCount = computed(() => selectedIds.value.size);
-const renderedCount = computed(() => listItems.value.length);
+const loadedItemsCount = computed(() => itemsCache.size);
 
-// 生成列表项数据
-const generateItems = (count: number): ListItemData[] => {
+// 生成单个列表项数据
+const generateItem = (index: number): ListItemData => {
   const categories = ['工作', '生活', '学习', '娱乐', '其他'];
   const priorities = [1, 2, 3, 4, 5];
   
-  const newItems: ListItemData[] = [];
-  for (let i = 0; i < count; i++) {
-    const id = `item-${itemIdCounter++}`;
-    const category = categories[Math.floor(Math.random() * categories.length)];
-    const priority = priorities[Math.floor(Math.random() * priorities.length)];
-    
-    newItems.push({
-      id,
-      title: `项目 ${itemIdCounter}`,
-      description: `这是第 ${itemIdCounter} 个项目的详细描述，属于 ${category} 类别，优先级为 ${priority}。`,
-      category,
-      priority,
-      timestamp: Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000, // 30天内
-    });
-  }
-  return newItems;
+  const category = categories[Math.floor(Math.random() * categories.length)];
+  const priority = priorities[Math.floor(Math.random() * priorities.length)];
+  const id = `item-${index}`;
+  
+  return {
+    id,
+    title: `项目 ${index + 1}`,
+    description: `这是第 ${index + 1} 个项目的详细描述，属于 ${category} 类别，优先级为 ${priority}。`,
+    category,
+    priority,
+    timestamp: Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000, // 30天内
+    index,
+  };
 };
 
-// 加载更多项目
-const loadMoreItems = () => {
-  if (listItems.value.length >= totalItems) return;
+/**
+ * DataProvider 数据获取函数
+ */
+const fetchData = async (indices: number[]): Promise<ListItemData[]> => {
+  console.log('🔄 fetchData triggered for indices:', indices);
   
-  const newItems = generateItems(batchSize);
-  listItems.value = [...listItems.value, ...newItems];
+  // 筛选出未缓存的索引
+  const uncachedIndices = indices.filter(index => !itemsCache.has(index) && index < totalItems);
+  
+  if (uncachedIndices.length === 0) {
+    console.log('✅ All requested items are already in cache');
+    return indices.map(index => itemsCache.get(index)).filter((item): item is ListItemData => item !== undefined);
+  }
+  
+  console.log(`📦 Generating ${uncachedIndices.length} new items`);
+  
+  // 模拟网络延迟
+  await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 100));
+  
+  // 生成并缓存新项目
+  uncachedIndices.forEach(index => {
+    const newItem = generateItem(index);
+    itemsCache.set(index, newItem);
+    
+    // 更新最大 ID 计数
+    itemIdCounter = Math.max(itemIdCounter, index + 1);
+  });
   
   // 更新内存使用统计
   updateMemoryUsage();
+  
+  console.log(`📊 Total cached items: ${itemsCache.size}`);
+  
+  // 返回所有请求的项目
+  return indices.map(index => itemsCache.get(index)).filter((item): item is ListItemData => item !== undefined);
 };
 
 // 更新内存使用统计
 const updateMemoryUsage = () => {
   // 模拟内存使用计算
   const baseMemory = 50; // 基础内存
-  const itemMemory = listItems.value.length * 0.1; // 每个项目约0.1MB
+  const itemMemory = itemsCache.size * 0.1; // 每个项目约0.1MB
   memoryUsage.value = Math.round((baseMemory + itemMemory) * 10) / 10;
 };
 
@@ -164,7 +193,14 @@ const handleSelectionChange = (event: SelectionEvent) => {
 
 const handleFocusChange = (entityId: string | number | null) => {
   if (entityId) {
-    focusedItem.value = listItems.value.find(item => item.id === entityId) || null;
+    const itemId = entityId as string;
+    // 从缓存中查找项目
+    for (const [_, item] of itemsCache.entries()) {
+      if (item.id === itemId) {
+        focusedItem.value = item;
+        break;
+      }
+    }
   } else {
     focusedItem.value = null;
   }
@@ -177,9 +213,13 @@ const handleItemClick = (itemId: string) => {
   }
 };
 
+const handleScroll = (scrollTop: number, direction: string) => {
+  // 更新滚动位置
+  scrollPosition.value = scrollTop;
+};
+
 const handleScrollSettled = (visibleIndices: number[]) => {
   visibleItems.value = visibleIndices.slice(0, 5); // 只显示前5个
-  scrollPosition.value = window.scrollY;
 };
 
 // 控制方法
@@ -196,16 +236,20 @@ const clearSelection = () => {
 };
 
 const selectRandom = () => {
-  if (listItems.value.length === 0) return;
+  // 收集所有已加载的项目 ID
+  const loadedIds: string[] = [];
+  itemsCache.forEach(item => loadedIds.push(item.id));
   
-  const randomCount = Math.min(10, listItems.value.length);
+  if (loadedIds.length === 0) return;
+  
+  const randomCount = Math.min(10, loadedIds.length);
   const randomIndices = new Set<number>();
   
   while (randomIndices.size < randomCount) {
-    randomIndices.add(Math.floor(Math.random() * listItems.value.length));
+    randomIndices.add(Math.floor(Math.random() * loadedIds.length));
   }
   
-  const randomIds = Array.from(randomIndices).map(i => listItems.value[i].id);
+  const randomIds = Array.from(randomIndices).map(i => loadedIds[i]);
   
   if (selectionWrapperRef.value?.selectionApi) {
     selectionWrapperRef.value.selectionApi.selectEntities(randomIds);
@@ -213,38 +257,22 @@ const selectRandom = () => {
 };
 
 const scrollToRandom = () => {
-  if (listItems.value.length === 0) return;
+  const loadedIndices = Array.from(itemsCache.keys());
   
-  const randomIndex = Math.floor(Math.random() * listItems.value.length);
-  const randomItem = listItems.value[randomIndex];
+  if (loadedIndices.length === 0) return;
   
-  // 滚动到随机项目
-  const element = document.querySelector(`[data-id="${randomItem.id}"]`);
-  if (element) {
-    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }
+  const randomIndex = loadedIndices[Math.floor(Math.random() * loadedIndices.length)];
   
   // 设置焦点
-  if (selectionWrapperRef.value?.selectionApi) {
-    selectionWrapperRef.value.selectionApi.focus(randomItem.id);
+  const item = itemsCache.get(randomIndex);
+  if (item && selectionWrapperRef.value?.selectionApi) {
+    selectionWrapperRef.value.selectionApi.focus(item.id);
   }
 };
 
 // 生命周期
 onMounted(() => {
-  // 初始加载
-  loadMoreItems();
-  
-  // 监听滚动事件
-  const handleScroll = () => {
-    scrollPosition.value = window.scrollY;
-  };
-  
-  window.addEventListener('scroll', handleScroll);
-  
-  onUnmounted(() => {
-    window.removeEventListener('scroll', handleScroll);
-  });
+  console.log('🚀 Component mounted');
 });
 </script>
 
@@ -310,6 +338,30 @@ onMounted(() => {
   height: 100%;
   padding: 0;
   margin: 0;
+  overflow-x: hidden; /* 防止水平溢出 */
+}
+
+.placeholder-item {
+  height: 80px;
+  background: #f8f9fa;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #adb5bd;
+  border: 1px dashed #dee2e6;
+}
+
+.placeholder-content {
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
 }
 
 .status-bar {

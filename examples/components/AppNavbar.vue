@@ -54,6 +54,21 @@
             </router-link>
           </div>
         </div>
+
+        <!-- 调试功能组 -->
+        <div class="nav-group">
+          <span class="group-label">调试</span>
+          <div class="group-links">
+            <router-link to="/debug/list-dynamic-load" class="nav-link" title="列表动态加载调试">
+              <span class="link-icon">🐛</span>
+              <span class="link-text">列表加载</span>
+            </router-link>
+            <router-link to="/debug/masonry-dynamic-load" class="nav-link" title="瀑布流动态加载调试">
+              <span class="link-icon">🧱</span>
+              <span class="link-text">瀑布流加载</span>
+            </router-link>
+          </div>
+        </div>
       </div>
     </div>
   </nav>

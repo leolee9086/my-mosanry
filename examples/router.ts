@@ -42,6 +42,18 @@ const routes = [
         name: '大列表示例' 
     },
     
+    // 调试功能示例
+    { 
+        path: '/debug/list-dynamic-load', 
+        component: () => import('./debug-list-dynamic-load.vue'), 
+        name: '列表动态加载调试' 
+    },
+    { 
+        path: '/debug/masonry-dynamic-load', 
+        component: () => import('./debug-masonry-dynamic-load.vue'), 
+        name: '瀑布流动态加载调试' 
+    },
+    
     // 默认重定向
     { path: '/', redirect: '/selection/basic' },
     { path: '/selection', redirect: '/selection/basic' },
