@@ -1,14 +1,31 @@
 {
   "name": "@leolee9086/my-masonry",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "A high-performance, general-purpose virtual masonry/grid layout component for Vue 3.",
-  "main": "src/index.js",
+  "main": "./dist/my-masonry.umd.js",
+  "module": "./dist/my-masonry.es.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/my-masonry.es.js",
+      "require": "./dist/my-masonry.umd.js"
+    },
+    "./style.css": "./dist/style.css"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --config vite.config.dev.ts",
     "build": "vite build",
-    "preview": "vite preview"
+    "build:types": "vue-tsc --declaration --emitDeclarationOnly --outDir dist/types",
+    "preview": "vite preview",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "vue",
@@ -17,20 +34,34 @@
     "grid",
     "virtual-scroll",
     "virtual-list",
-    "component"
+    "component",
+    "layout",
+    "infinite-scroll"
   ],
   "author": "leolee9086",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/leolee9086/my-mosanry.git"
+  },
+  "bugs": {
+    "url": "https://github.com/leolee9086/my-mosanry/issues"
+  },
+  "homepage": "https://github.com/leolee9086/my-mosanry#readme",
+  "peerDependencies": {
+    "vue": "^3.3.0"
+  },
   "dependencies": {
-    "@types/rbush": "^4.0.0",
-    "p-queue": "^8.1.0",
-    "rbush": "^4.0.1",
-    "typescript": "^5.8.3",
-    "vue": "^3.5.17",
-    "vue-router": "^4.5.1"
+    "rbush": "^4.0.1"
   },
   "devDependencies": {
+    "@types/rbush": "^4.0.0",
     "@vitejs/plugin-vue": "^6.0.0",
-    "vite": "^7.0.0"
+    "p-queue": "^8.1.0",
+    "typescript": "^5.8.3",
+    "vite": "^7.0.0",
+    "vue": "^3.5.17",
+    "vue-router": "^4.5.1",
+    "vue-tsc": "^2.2.12"
   }
 }
