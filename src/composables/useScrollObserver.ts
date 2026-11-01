@@ -1,4 +1,4 @@
-import { ref, onMounted, onUnmounted, Ref } from 'vue';
+import { ref, onUnmounted, watch, Ref } from 'vue';
 import { throttle } from '../utils/throttle';
 
 export interface UseScrollObserverOptions {
@@ -112,16 +112,25 @@ export function useScrollObserver({
 
     const { ignoreScrollEventsFor, ignoreTimeout } = createIgnoreScrollEventsFor(isScrollIgnored);
 
-    onMounted(() => {
-        if (scrollContainer.value) {
-            scrollContainer.value.addEventListener('scroll', handleScroll, { passive: true });
-        }
-    });
+    // 绑定时机：**等滚动容器元素真的出现**再绑。
+    //
+    // 原来只在 onMounted 里绑一次，但那时 scrollContainer.value 可能还是 null
+    // （模板 ref 的赋值时机与 onMounted 的先后关系并不是「总是已赋值」）——
+    // 一旦为 null，addEventListener 被跳过，之后**再也不会重试**，
+    // 表现是：元素上滚得好好的，但组合式函数里的 scrollTop 永远是 0。
+    // 用 watch（immediate，元素一出现就跑）既避开时序问题，
+    // 也顺带支持了容器被替换的情况。
+    let bound: HTMLElement | null = null;
+    const bind = (el: HTMLElement | null) => {
+        if (bound === el) return;
+        if (bound !== null) bound.removeEventListener('scroll', handleScroll);
+        bound = el;
+        if (el !== null) el.addEventListener('scroll', handleScroll, { passive: true });
+    };
+    watch(scrollContainer, (el) => { bind(el ?? null); }, { immediate: true });
 
     onUnmounted(() => {
-        if (scrollContainer.value) {
-            scrollContainer.value.removeEventListener('scroll', handleScroll);
-        }
+        bind(null);
         if (scrollTimeout) {
             clearTimeout(scrollTimeout);
         }

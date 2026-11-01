@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { ref, shallowRef, watch, type Ref } from 'vue'
+import { ref, shallowRef, watch, type Ref, type ComputedRef } from 'vue'
 
 /**
  * @织: 定义数据项的基本结构，必须包含一个唯一的 id
@@ -29,7 +29,15 @@ export type DataFetcher = (indices: number[]) => Promise<DataItem[]>;
  * @织: useVirtualDataSource 的选项接口
  */
 export interface UseVirtualDataSourceOptions {
-    totalCount: Ref<number>;
+    /**
+     * 数据总数量。
+     *
+     * 类型放宽到 `Ref<number> | ComputedRef<number>`：调用方常常直接传一个 computed
+     * （总数往往是由别的状态推导出来的）。而 `ComputedRef` 因为缺少写入口，
+     * 在类型上并不满足 `Ref<number>`，所以这里显式接受两者 —— 本 composable
+     * 也只读它，不写。
+     */
+    totalCount: Ref<number> | ComputedRef<number>;
     dataFetcher: DataFetcher;
     initialPageSize?: number; // 初始加载的数据量
     createPlaceholder?: (index: number) => any; // 自定义占位符创建函数
