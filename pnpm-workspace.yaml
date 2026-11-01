@@ -1,0 +1,4 @@
+# pnpm 10+ 用这个文件决定哪些依赖允许跑安装脚本。
+# esbuild 需要 postinstall 下载/校验二进制，vite 构建依赖它。
+allowBuilds:
+  esbuild: true

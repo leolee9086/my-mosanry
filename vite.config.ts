@@ -9,6 +9,9 @@ export default defineConfig({
     lib: {
       entry: resolve(__dirname, 'src/index.ts'),
       name: 'MyMasonry',
+      // 样式产物固定叫 style.css：package.json 的 exports 就指向 ./dist/style.css，
+      // 用默认的 my-masonry.css 会让 `import '@leolee9086/my-masonry/style.css'` 直接找不到文件。
+      cssFileName: 'style',
       fileName: (format) => `my-masonry.${format}.js`
     },
     rollupOptions: {

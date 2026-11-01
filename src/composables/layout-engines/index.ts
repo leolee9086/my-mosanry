@@ -38,18 +38,21 @@ import * as ListLayout from './list';
 // 布局模式类型
 type LayoutMode = 'masonry' | 'grid' | 'justified' | 'list';
 
-export {
-    // 布局引擎工厂
-    useLayoutEngine,
-    
-    // 类型定义
+// 类型必须用 export type 单独导出：isolatedModules 下把类型混进值导出，
+// vue-tsc 生成声明文件时会报 TS1205，发布出去就没有 .d.ts。
+export type {
     BushItem,
     LayoutItem,
     LayoutColumn,
     LayoutMode,
     UseLayoutEngineOptions,
     LayoutEngineResult,
-    
+};
+
+export {
+    // 布局引擎工厂
+    useLayoutEngine,
+
     // 通用工具函数
     getShortestColumn,
     initializeColumns,

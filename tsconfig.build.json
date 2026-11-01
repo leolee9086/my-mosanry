@@ -1,0 +1,21 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "noEmit": false,
+        "emitDeclarationOnly": true,
+        "declaration": true,
+        "declarationMap": false,
+        "declarationDir": "./dist/types",
+        "rootDir": "./src"
+    },
+    "include": [
+        "src/**/*.ts",
+        "src/index.ts"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist",
+        "examples",
+        "src/components/AInote.md"
+    ]
+}
