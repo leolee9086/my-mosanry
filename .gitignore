@@ -1,0 +1,6 @@
+# 依赖与构建产物不入库：这个仓库以前把 node_modules 和 dist 都提交了，
+# 每次 install/build 都会让工作区变脏，看不出真正的改动。
+node_modules/
+dist/
+*.log
+.DS_Store
