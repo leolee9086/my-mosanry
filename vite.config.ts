@@ -12,7 +12,8 @@ export default defineConfig({
       // 样式产物固定叫 style.css：package.json 的 exports 就指向 ./dist/style.css，
       // 用默认的 my-masonry.css 会让 `import '@leolee9086/my-masonry/style.css'` 直接找不到文件。
       cssFileName: 'style',
-      fileName: (format) => `my-masonry.${format}.js`
+      // 包采用 ESM；require 入口必须用 .cjs，避免 Node 将 UMD 文件解释成 ESM。
+      fileName: (format) => `my-masonry.${format}.${format === 'umd' ? 'cjs' : 'js'}`
     },
     rollupOptions: {
       // 确保外部化处理那些你不想打包进库的依赖

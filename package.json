@@ -3,29 +3,31 @@
   "version": "0.1.0",
   "type": "module",
   "description": "A high-performance, general-purpose virtual masonry/grid layout component for Vue 3.",
-  "main": "./dist/my-masonry.umd.js",
+  "main": "./dist/my-masonry.umd.cjs",
   "module": "./dist/my-masonry.es.js",
   "types": "./dist/types/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/types/index.d.ts",
       "import": "./dist/my-masonry.es.js",
-      "require": "./dist/my-masonry.umd.js"
+      "require": "./dist/my-masonry.umd.cjs"
     },
     "./style.css": "./dist/style.css"
   },
   "files": [
     "dist",
-    "src",
     "README.md",
     "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "vite --config vite.config.dev.ts",
     "build": "vite build",
     "build:types": "vue-tsc -p tsconfig.build.json",
     "preview": "vite preview",
-    "prepublishOnly": "npm run build"
+    "prepack": "pnpm run build && pnpm run build:types"
   },
   "keywords": [
     "vue",

@@ -2,5 +2,6 @@
 # 每次 install/build 都会让工作区变脏，看不出真正的改动。
 node_modules/
 dist/
+out/
 *.log
 .DS_Store

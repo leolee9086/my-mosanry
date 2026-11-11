@@ -49,6 +49,7 @@ npm install @leolee9086/my-masonry
 <script setup>
 import { ref } from 'vue'
 import { VirtualMasonryGrid } from '@leolee9086/my-masonry'
+import '@leolee9086/my-masonry/style.css'
 
 const items = ref([
   { id: 1, title: '卡片 1', content: '内容...' },
