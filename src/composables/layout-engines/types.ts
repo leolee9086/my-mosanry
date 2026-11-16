@@ -82,12 +82,23 @@ export class BushItem implements LayoutItem {
     }
 }
 
+/** 布局完成范围与视口需求分开：估计的滚动高度不能冒充实际覆盖高度。 */
+export interface LayoutViewport {
+    scrollTop: number;
+    height: number;
+    width: number;
+    coveredHeight: number;
+    laidOutCount: number;
+}
+
 export interface LayoutEngineResult {
     allItems: Ref<LayoutItem[]>;
     totalHeight: Ref<number>;
     logicalScrollHeight: Ref<number>; 
     contentHeight: Ref<number>;
     columnCount: Ref<number>;
+    /** 所有列都已完成布局的底边；用于按视口需求继续消费数据。 */
+    getCoveredHeight: () => number;
     updateItemHeight: (id: any, height: number) => void;
     rebuildLayout: () => void;
     findVisibleItems: (viewport: { top: number, height: number }) => LayoutItem[];

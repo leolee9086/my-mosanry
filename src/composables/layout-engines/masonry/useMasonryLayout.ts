@@ -42,6 +42,8 @@ export function useMasonryLayout({
 }: Omit<UseLayoutEngineOptions, 'mode'>): LayoutEngineResult {
     // R-tree 用于高效的空间查询
     const tree = new RBush<BushItem>();
+    // 保留索引中的原对象，移除时不能用已经改变坐标的新对象寻找旧包围盒。
+    const indexedItems = new Map<string | number, BushItem>();
     
     // 双重缓存 - 渲染层 (shallowRef)
     const allItems = shallowRef<LayoutItem[]>([]); 
@@ -105,6 +107,7 @@ export function useMasonryLayout({
             });
             
             // 更新R-Tree和视图
+            for (const item of newBushItems) indexedItems.set(item.id, item);
             tree.load(newBushItems);
             allItems.value = [...allItems.value, ...newLayoutItems];
             updateTotalHeight(); // 手动更新总高度
@@ -123,7 +126,7 @@ export function useMasonryLayout({
         pendingUpdates.clear();
         
         // 使用抽离出的纯函数
-        const { updatedItems, updatedColumns, hasChanges } = processMasonryHeightUpdates({
+        const { updatedItems, updatedColumns, changedColumns, hasChanges } = processMasonryHeightUpdates({
             pendingUpdates: updatesToProcess,
             idToItemMap,
             allItems: allItems.value,
@@ -133,6 +136,20 @@ export function useMasonryLayout({
 
         // 如果有变化，更新状态
         if (hasChanges) {
+            const replacements: BushItem[] = [];
+            for (const [columnIndex, start] of changedColumns) {
+                const column = updatedColumns[columnIndex];
+                for (let position = start; position < column.items.length; position++) {
+                    const item = column.items[position];
+                    const previous = indexedItems.get(item.id);
+                    if (!previous) throw new Error('待更新卡片缺少空间索引');
+                    tree.remove(previous);
+                    const replacement = new BushItem(item);
+                    indexedItems.set(item.id, replacement);
+                    replacements.push(replacement);
+                }
+            }
+            tree.load(replacements);
             allItems.value = updatedItems;
             columns = updatedColumns;
             updateTotalHeight(); // 手动更新总高度
@@ -160,7 +177,7 @@ export function useMasonryLayout({
     };
 
     // 计算逻辑滚动高度
-    const logicalScrollHeight = createScrollHeightComputed(totalHeight, estimatedTotalCount, allItems.value);
+    const logicalScrollHeight = createScrollHeightComputed(totalHeight, estimatedTotalCount, allItems);
     
     // 计算实际内容高度（考虑浏览器限制）
     const contentHeight = createContentHeightComputed(logicalScrollHeight);
@@ -174,8 +191,12 @@ export function useMasonryLayout({
             onBeforeRebuildLayout();
         }
 
+        scheduleProcessing.cancel();
+        pendingUpdates.clear();
         tree.clear();
+        indexedItems.clear();
         idToItemMap.clear();
+        totalHeight.value = 0;
         const existingItems = [...items.value];
         allItems.value = [];
         
@@ -214,6 +235,7 @@ export function useMasonryLayout({
         logicalScrollHeight,
         contentHeight,
         columnCount,
+        getCoveredHeight: () => columns.length ? Math.min(...columns.map(column => column.height)) : 0,
         updateItemHeight,
         rebuildLayout,
         findVisibleItems,

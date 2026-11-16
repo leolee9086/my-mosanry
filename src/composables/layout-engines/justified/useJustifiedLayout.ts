@@ -184,7 +184,7 @@ export function useJustifiedLayout({
     };
 
     // 计算逻辑滚动高度
-    const logicalScrollHeight = createScrollHeightComputed(totalHeight, estimatedTotalCount, allItems.value);
+    const logicalScrollHeight = createScrollHeightComputed(totalHeight, estimatedTotalCount, allItems);
     
     // 计算实际内容高度（考虑浏览器限制）
     const contentHeight = createContentHeightComputed(logicalScrollHeight);
@@ -256,6 +256,10 @@ export function useJustifiedLayout({
         logicalScrollHeight,
         contentHeight,
         columnCount,
+        getCoveredHeight: () => {
+            const last = allItems.value[allItems.value.length - 1];
+            return last ? last.y + last.height : 0;
+        },
         updateItemHeight,
         rebuildLayout,
         findVisibleItems,

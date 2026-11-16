@@ -16,6 +16,10 @@ export { useVirtualization } from './composables/useVirtualization';
 export { useScrollObserver } from './composables/useScrollObserver';
 export { useVirtualScrollbar } from './composables/useVirtualScrollbar';
 export { useVirtualDataSource } from './composables/useVirtualDataSource';
+export { createStreamDataSource } from './composables/streamDataSource';
+export { useStreamDataSource } from './composables/useStreamDataSource';
+export type { StreamDataSource, StreamSnapshot, StreamWriter } from './composables/streamDataSource';
+export type { LayoutViewport } from './composables/layout-engines/types';
 export { useSelectionSystem } from './composables/useSelectionSystem';
 export { useSelectionBox } from './composables/useSelectionBox';
 

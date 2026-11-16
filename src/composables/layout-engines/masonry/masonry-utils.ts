@@ -237,7 +237,12 @@ export function findMasonryVisibleItems(params: {
         maxY: viewport.top + viewport.height,
     });
     
-    // 从R-Tree拿到ID，再从allItems中获取最新的对象
-    const visibleIds = new Set(results.map(r => r.id));
-    return allItems.filter(item => visibleIds.has(item.id));
+    // 布局索引随重建同步；只访问空间查询命中的项，不再扫描全部已布局数据。
+    const visible: LayoutItem[] = [];
+    for (const hit of results) {
+        const item = allItems[hit.index];
+        if (!item || item.id !== hit.id) throw new Error('瀑布流空间索引与布局不一致');
+        if (item.y + item.height > viewport.top && item.y < viewport.top + viewport.height) visible.push(item);
+    }
+    return visible.sort((left, right) => left.index - right.index);
 } 

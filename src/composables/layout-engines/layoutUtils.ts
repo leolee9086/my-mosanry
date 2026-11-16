@@ -1,4 +1,4 @@
-import { computed, ref, Ref, watch, ComputedRef } from 'vue';
+import { computed, ref, Ref, watch, ComputedRef, getCurrentScope, onScopeDispose } from 'vue';
 import { createRafScheduler } from '../../utils/createRafScheduler';
 import type { LayoutColumn, LayoutItem, UseLayoutEngineOptions } from './types';
 import { MAX_BROWSER_HEIGHT } from './types';
@@ -47,15 +47,9 @@ export function calculateTotalHeight(
         calculatedHeight = Math.max(...columns.map(c => c.height));
     }
     
-    // 如果有估算的总项目数，根据已知项目的平均高度估算总高度
-    if (estimatedTotalCount && estimatedTotalCount > allItems.length && allItems.length > 0) {
-        const avgHeight = calculatedHeight / allItems.length;
-        const estimatedHeight = avgHeight * estimatedTotalCount;
-        calculatedHeight = Math.max(calculatedHeight, estimatedHeight);
-    }
-    
-    // 限制最大高度，防止浏览器渲染问题
-    return Math.min(calculatedHeight, MAX_BROWSER_HEIGHT);
+    // totalHeight 只表达已计算的布局。未知记录的估计和浏览器 CSS 高度上限
+    // 分别由 createScrollHeightComputed / createContentHeightComputed 处理。
+    return calculatedHeight;
 }
 
 /**
@@ -74,11 +68,11 @@ export function createColumnCountComputed({ containerWidth, columnWidth }: Pick<
 export function createScrollHeightComputed(
     totalHeight: Ref<number>, 
     estimatedTotalCount: UseLayoutEngineOptions['estimatedTotalCount'], 
-    allItems: LayoutItem[]
+    allItems: Readonly<Ref<LayoutItem[]>> | LayoutItem[]
 ): ComputedRef<number> {
     return computed(() => {
         const estimatedCount = estimatedTotalCount?.value;
-        const currentItemCount = allItems.length;
+        const currentItemCount = Array.isArray(allItems) ? allItems.length : allItems.value.length;
 
         if (estimatedCount && estimatedCount > currentItemCount) {
             // 这里totalHeight一定有值，因为它是一个Ref<number>
@@ -108,17 +102,18 @@ export function createContentHeightComputed(logicalScrollHeight: ComputedRef<num
  */
 export function setupItemsWatch(
     items: UseLayoutEngineOptions['items'], 
-    appendItems: (itemsToAppend: any[]) => void, 
+    appendItems: (itemsToAppend: unknown[]) => void,
     rebuildLayout: () => void,
-    idKey: string
+    _idKey: string
 ) {
+    // 这里的输入是对象快照。引用替换也表示数据更新，即使稳定 ID 没变。
+    // 增长时必须先确认旧前缀未变，不能把「修改旧项并追加」误判成纯追加。
     watch(items, (newItems, oldItems) => {
-        if (newItems.length > oldItems.length) {
-            // 这是加载了更多数据
-            const itemsToAppend = newItems.slice(oldItems.length);
-            appendItems(itemsToAppend);
-        } else if (newItems.length < oldItems.length || newItems.some((item, i) => item[idKey] !== oldItems[i]?.[idKey])) {
-            // 这是一个全新的数据集，或者发生了排序/删除等复杂变化
+        const prefixUnchanged = newItems.length >= oldItems.length
+            && oldItems.every((item: unknown, index: number) => Object.is(item, newItems[index]));
+        if (prefixUnchanged && newItems.length > oldItems.length) {
+            appendItems(newItems.slice(oldItems.length));
+        } else if (!prefixUnchanged) {
             rebuildLayout();
         }
     });
@@ -130,16 +125,10 @@ export function setupItemsWatch(
 export function createUpdateScheduler(isScrolling: UseLayoutEngineOptions['isScrolling'], processPendingUpdates: () => void) {
     const scheduleProcessing = createRafScheduler(processPendingUpdates);
     
-    // 监听滚动状态
-    watch(isScrolling, (scrolling) => {
-        // 当滚动停止时
-        if (!scrolling) {
-            // 稍作等待，让惯性滚动结束
-            setTimeout(() => {
-                scheduleProcessing();
-            }, 100); // 100ms 的冷却时间
-        }
-    });    
-    
+    // 不叠加一个无法撤销的延时。滚动结束后的下一帧处理积累的尺寸变化。
+    const stop = watch(isScrolling, scrolling => {
+        if (!scrolling) scheduleProcessing();
+    });
+    if (getCurrentScope()) onScopeDispose(() => { stop(); scheduleProcessing.cancel(); });
     return scheduleProcessing;
 } 

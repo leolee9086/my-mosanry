@@ -1,91 +1,72 @@
 <template>
   <VirtualMasonryGrid
+    :key="gridKey"
     ref="gridRef"
-    v-bind="$props"
+    v-bind="$attrs"
+    :mode="props.mode"
     :items="items"
-    :estimated-total-count="totalCount"
+    :estimated-total-count="estimatedCount"
     :managed-by-provider="true"
+    @layout-viewport="stream.updateViewport"
     @scroll-settled="handleScrollSettled"
   >
-    <template #default="slotProps">
-      <slot name="default" v-bind="slotProps"></slot>
-    </template>
-    <template #placeholder="slotProps">
-      <slot name="placeholder" v-bind="slotProps"></slot>
-    </template>
+    <template #default="slotProps"><slot name="default" v-bind="slotProps" /></template>
+    <template #placeholder="slotProps"><slot name="placeholder" v-bind="slotProps" /></template>
   </VirtualMasonryGrid>
 </template>
 
 <script setup lang="ts">
-import { toRef, type VNodeProps, ref, nextTick } from 'vue';
+import { computed, toRef, type VNodeProps, ref, watch } from 'vue';
 import { useVirtualDataSource, type DataFetcher } from '../composables/useVirtualDataSource';
+import { useStreamDataSource } from '../composables/useStreamDataSource';
+import type { StreamDataSource } from '../composables/streamDataSource';
 import VirtualMasonryGrid from './VirtualMasonryGrid.vue';
 
-const gridRef = ref<InstanceType<typeof VirtualMasonryGrid> | null>(null);
-
-// @织: 这是一个数据策略提供者组件。
-// 它将根据传入的 props，决定是采用"直通"模式还是"虚拟数据源"模式，
-// 并向其插槽中的子组件提供最终的 `items` 数组。
-
-// --- Types ---
-// @织: 从 VirtualMasonryGrid 组件获取其 Props 类型，实现真正的类型安全
+defineOptions({ inheritAttrs: false });
 type GridProps = VNodeProps & InstanceType<typeof VirtualMasonryGrid>['$props'];
-
-// --- Props ---
-// @织: 让本组件的props继承自Grid,
-// Omit排除了我们自己管理的几个props,
-// 这样就能把所有其它grid的props(例如min/maxColumnWidth)透传下去
 interface Props extends /* @vue-ignore */ Omit<GridProps, 'items' | 'estimatedTotalCount' | 'onScrollSettled'> {
-  // --- DataProvider Props ---
-  totalCount: number;
-  dataFetcher: DataFetcher;
+  totalCount?: number;
+  dataFetcher?: DataFetcher;
+  sourceKey?: string | number;
+  /** 布局模式更换时重建 Grid，保证旧引擎及观察器随作用域卸载。 */
+  mode?: 'masonry' | 'grid' | 'justified' | 'list';
+  /** source 与 totalCount/dataFetcher 两种策略互斥。流缓存由调用者的插件持有。 */
+  source?: StreamDataSource;
 }
-
 const props = defineProps<Props>();
-
-// --- Logic ---
-const { items, requestDataForRange } = useVirtualDataSource({
-  totalCount: toRef(props, 'totalCount'),
-  dataFetcher: props.dataFetcher,
+const gridRef = ref<InstanceType<typeof VirtualMasonryGrid> | null>(null);
+watch(() => [props.source, props.dataFetcher, props.totalCount], () => {
+  if (props.source) {
+    if (props.dataFetcher !== undefined || props.totalCount !== undefined) throw new Error('source 不能与索引数据源配置混用');
+  } else if (!props.dataFetcher || props.totalCount === undefined) {
+    throw new Error('DataProvider 需要 source，或 totalCount 与 dataFetcher');
+  }
+}, { immediate: true });
+const indexed = useVirtualDataSource({
+  totalCount: computed(() => props.source ? 0 : props.totalCount ?? 0),
+  dataFetcher: computed(() => props.dataFetcher ?? unavailableFetcher),
+  sourceKey: toRef(props, 'sourceKey'),
 });
+const stream = useStreamDataSource(toRef(props, 'source'));
+const items = computed(() => props.source ? stream.items.value : indexed.items.value);
+const estimatedCount = computed(() => props.source ? stream.snapshot.value.count : props.totalCount);
+const error = computed(() => props.source ? stream.snapshot.value.error : indexed.error.value);
+const isFetching = computed(() => props.source ? stream.snapshot.value.status === 'receiving' : indexed.isFetching.value);
+// 查询切换从顶部开始，旧 Grid 的观察器与排队布局跟随卸载；追加不改变 key。
+const instance = ref(0);
+watch(() => [props.source, props.sourceKey], () => { instance.value++; }, { flush: 'sync' });
+const gridKey = computed(() => `${instance.value}:${props.mode ?? 'masonry'}:${props.source ? stream.snapshot.value.generation : 'indexed'}`);
 
-const handleScrollSettled = async (visibleIndices: number[]) => {
-  if (visibleIndices.length === 0) return;
-  
-  // 加载数据前禁用布局动画，防止占位符被替换时的布局抖动
-  if (gridRef.value) {
-    gridRef.value.setTransitionEnabled(false);
-  }
-  
+async function unavailableFetcher(): Promise<never> {
+  throw new Error('当前数据策略没有索引读取器');
+}
+async function handleScrollSettled(indices: number[]): Promise<void> {
+  if (props.source || !indices.length) return;
   try {
-    const fetchedItems = await requestDataForRange(visibleIndices);
-    
-    // @织: 只有当实际获取到新数据时，才可能发生布局抖动
-    if (fetchedItems && fetchedItems.length > 0 && gridRef.value) {
-      // @织: 命令 grid 在接下来 200ms 内忽略滚动事件
-      gridRef.value.ignoreScrollEventsFor(200);
-      
-      // 等待DOM更新完成后再启用过渡动画
-      await nextTick();
-      // 使用 requestAnimationFrame 确保在下一帧渲染前启用过渡
-      requestAnimationFrame(() => {
-        if (gridRef.value) {
-          gridRef.value.setTransitionEnabled(true);
-        }
-      });
-    } else {
-      // 没有新数据时也要恢复动画状态
-      if (gridRef.value) {
-        gridRef.value.setTransitionEnabled(true);
-      }
-    }
-  } catch (error) {
-    // 发生错误时确保恢复动画状态
-    console.error('[VirtualMasonryDataProvider] 数据加载错误:', error);
-    if (gridRef.value) {
-      gridRef.value.setTransitionEnabled(true);
-    }
+    await indexed.requestDataForRange(indices);
+  } catch (failure) {
+    if (!(failure instanceof DOMException && failure.name === 'AbortError')) console.error('[VirtualMasonryDataProvider]', failure);
   }
-};
-
-</script> 
+}
+defineExpose({ error, isFetching, reset: indexed.reset });
+</script>

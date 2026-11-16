@@ -1,6 +1,6 @@
 {
   "name": "@leolee9086/my-masonry",
-  "version": "0.1.0",
+  "version": "0.2.0-alpha.1",
   "type": "module",
   "description": "A high-performance, general-purpose virtual masonry/grid layout component for Vue 3.",
   "main": "./dist/my-masonry.umd.cjs",

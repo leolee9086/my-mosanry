@@ -76,14 +76,8 @@ export function useListLayout({
         const lastItem = allItems.value[allItems.value.length - 1];
         let calculatedHeight = lastItem.y + lastItem.height;
         
-        // 如果有估算的总项目数，根据已知项目的平均高度估算总高度
-        if (estimatedTotalCount?.value && estimatedTotalCount.value > allItems.value.length) {
-            const avgHeight = calculatedHeight / allItems.value.length;
-            const estimatedHeight = avgHeight * estimatedTotalCount.value;
-            calculatedHeight = Math.max(calculatedHeight, estimatedHeight);
-        }
-        
-        totalHeight.value = Math.min(calculatedHeight, 15_000_000); // MAX_BROWSER_HEIGHT
+        // 已布局高度和估算总高度分开；后者由共享滚动高度计算器处理。
+        totalHeight.value = calculatedHeight;
     };
 
     /**
@@ -179,7 +173,7 @@ export function useListLayout({
     };
 
     // 计算逻辑滚动高度
-    const logicalScrollHeight = createScrollHeightComputed(totalHeight, estimatedTotalCount, allItems.value);
+    const logicalScrollHeight = createScrollHeightComputed(totalHeight, estimatedTotalCount, allItems);
     
     // 计算实际内容高度（考虑浏览器限制）
     const contentHeight = createContentHeightComputed(logicalScrollHeight);
@@ -249,6 +243,10 @@ export function useListLayout({
         logicalScrollHeight,
         contentHeight,
         columnCount,
+        getCoveredHeight: () => {
+            const last = allItems.value[allItems.value.length - 1];
+            return last ? last.y + last.height : 0;
+        },
         updateItemHeight,
         rebuildLayout,
         findVisibleItems,

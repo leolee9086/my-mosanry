@@ -77,6 +77,16 @@ const loadMore = () => {
 <VirtualMasonryGrid :items="items" mode="justified" />
 ```
 
+## 流式数据源（0.2.0-alpha.1）
+
+`createStreamDataSource<T>()` 持有普通数组缓存。业务插件调用 `begin()` 取得本次查询的 writer，逐批 `append(items)`，最后 `complete()` 或 `fail(error)`。旧 writer 在新查询开始后会拒绝写入；批次中的重复 ID 会明确报错。每项只要求稳定的 `id: string | number`，业务请求、HTTP 解码及取消由调用应用负责。
+
+将该 source 传给 `VirtualMasonryDataProvider` 的 `source` 属性。组件每帧最多消费 32 条，直到已布局的最短列覆盖当前位置之后三屏；尚未浏览的数据保留在源缓存中。`source` 与原来的 `totalCount` / `dataFetcher` 两种配置互斥。索引读取器现在接收第二个 `AbortSignal` 参数，应将它传给实际请求。
+
+Grid 统一观察插槽内容的自然高度。应用可以更新单张卡片的图像比例，无需重建全部结果数组。直传 `items` 时使用不可变数组及条目快照：替换同 ID 的对象会重建布局；追加时保留原前缀对象引用即可增量布局。通过 DataProvider 切换 `mode` 会卸载旧 Grid 并重新建立布局。
+
+当前是预发布版本，应用集成验收仍在进行。CSS 内容高度仍受浏览器上限约束，尚未支持超大逻辑坐标映射；长距离浏览会累积已布局前缀。不能据此宣称任意规模和任意模式都已通过性能验收。
+
 ## 📚 API 文档
 
 ### VirtualMasonryGrid Props

@@ -158,7 +158,7 @@ export function useGridLayout({
     };
 
     // 计算逻辑滚动高度
-    const logicalScrollHeight = createScrollHeightComputed(totalHeight, estimatedTotalCount, allItems.value);
+    const logicalScrollHeight = createScrollHeightComputed(totalHeight, estimatedTotalCount, allItems);
     
     // 计算实际内容高度（考虑浏览器限制）
     const contentHeight = createContentHeightComputed(logicalScrollHeight);
@@ -212,6 +212,7 @@ export function useGridLayout({
         logicalScrollHeight,
         contentHeight,
         columnCount,
+        getCoveredHeight: () => columns.length ? Math.min(...columns.map(column => column.height)) : 0,
         updateItemHeight,
         rebuildLayout,
         findVisibleItems,
